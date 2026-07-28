@@ -590,13 +590,10 @@ function extractJSON(data) {
 // ═══════════════════════════════════════════════════
 async function callDeepSeek(messages, apiKey) {
   var body = {
-    model: 'deepseek-v4-pro',
+    model: 'deepseek-v4-pro-search',  // 支持联网搜索的 Pro 模型
     messages: messages,
     max_tokens: 24000,
-    temperature: 0.3,
-    extra_body: {
-      enable_search: true    // DeepSeek 联网搜索开关
-    }
+    temperature: 0.3
   };
   var resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
@@ -614,13 +611,11 @@ async function callDeepSeek(messages, apiKey) {
   if(data.error){ throw new Error(data.error.message || JSON.stringify(data.error)); }
   if(!data.choices || !data.choices[0]){ throw new Error('无回复内容'); }
   
-  // 不需要手动处理工具调用，DeepSeek 会自动完成搜索
   return {
     content: [{ type: 'text', text: data.choices[0].message.content }],
     stop_reason: data.choices[0].finish_reason || 'stop'
   };
-}
-async function runAnalysis(params, dsKey) {
+}async function runAnalysis(params, dsKey) {
   var prompt = buildPrompt(params);
   var content = [{ type: 'text', text: prompt }];
   var messages = [{ role: 'user', content: content }];
