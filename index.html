@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 搜索修复版</title>
+<title>盘口价值分析终端 · 完整版</title>
 <!-- Tesseract.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
@@ -53,9 +53,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 搜索修复版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 完整版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">DeepSeek Pro · 联网搜索已启用</div>
+  <div style="font-size:10.5px;color:#54678C">DeepSeek Pro · 强制联网搜索 · 数据校验</div>
 </div>
 
 <!-- API Key面板 + OCR引擎选择 -->
@@ -97,7 +97,7 @@ select option{background:#121B2E}
 <!-- 引擎状态条 -->
 <div style="background:#0E1626;border-bottom:1px solid #1E2A44;padding:4px 16px;font-size:10.5px;color:#6FA8F5;display:flex;justify-content:space-between">
   <span id="engine-status">🔍 当前: iOS OCR Server</span>
-  <span>⚙️ 联网搜索已启用</span>
+  <span>⚙️ 联网搜索+数据校验</span>
 </div>
 
 <div class="tabs">
@@ -478,7 +478,7 @@ async function recognizeImageWithOCR(base64Image) {
 }
 
 // ═══════════════════════════════════════════════════
-// Prompt 构建（包含强制搜索指令）
+// Prompt 构建（完整搜索+校验版）
 // ═══════════════════════════════════════════════════
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -504,25 +504,23 @@ function buildPrompt(params){
 ${oddsText ? "【PROLINE+盘口实价（OCR识别）】\n" + oddsText : "【未提供盘口实价，markets中odds填null】"}
 ${snap ? '【历史快照'+snap.ts+'】主胜'+snap.home+'/平'+snap.draw+'/客胜'+snap.away+'。' : '【无历史快照】'}
 
-【🚨 强制搜索指令（必须执行，不可跳过，优先级最高）】
-你必须调用 web_search 工具搜索以下信息。如果某项搜索结果为空，在报告中写“搜索无结果”，严禁编造任何数据。
+【🚨 强制搜索与数据校验规则（优先级最高，不可跳过）】
+你必须执行联网搜索，并将搜索结果准确填入报告。具体规则如下：
 
-具体搜索项和推荐关键词（使用英文或当地语言，确保获取准确信息）：
-1. 首回合比分：搜索 "{away} vs {home} head to head" 或 "{home} {away} 交锋记录" 或 "{home} {away} match report"
-2. 两队近5场战绩：搜索 "{team} recent form" 或 "{team} last 5 matches"
-3. 伤病/停赛：搜索 "{team} injuries" 或 "{team} team news"
-4. 市场共识赔率：搜索 "{home} {away} odds" 或 "{home} vs {away} betting odds"
-5. 场馆天气：搜索 "{venue} weather forecast"
-6. 主裁判：搜索 "{match} referee" 或 "{home} {away} referee"
-7. 两队角球数据：搜索 "{team} corners per game" 或 "{team} average corners"
+1. 首回合比分：搜索 "{away} vs {home}" 或 "{home} {away} 交锋记录"。若找到明确比分（如 "1-0"），必须使用；若搜索无结果，填"搜索无结果"。
+2. 伤病/停赛：搜索 "{team} injuries" 或 "{team} team news"。
+3. 近期战绩：搜索 "{team} recent form"。
+4. 角球数据：搜索 "{team} corners per game"。
+5. 市场共识赔率：搜索 "{home} {away} odds"。
+6. 主裁判与天气：搜索 "{match} referee" 和 "{venue} weather"。
 
-执行规则：
-- 每一项搜索都必须单独发起一次工具调用，禁止只搜索一次就停止。
-- 如果首次搜索未返回有效信息，立即尝试替换关键词或添加联赛名称（如 "UCL"、"MLS"）。
-- 所有搜索返回的真实数据必须优先用于填写报告的 news、meta、key_data 等字段。
-- 若某数据无法搜索到，填 "搜索无结果"，不得使用"未查到"、"未知"等模糊表述（"搜索无结果"是明确的事实陈述）。
+【数据使用强制规则】
+- 赔率数据：必须使用 OCR 识别的具体数值，不得改动。即使你认为赔率有误，也以OCR为准。
+- Edge 计算：Edge = AI概率 - 1/赔率。严禁将角球预期与盘口线的差值当作Edge。
+- 一致性：报告中所有盘口的 Edge 值必须与表格中的一致，不得前后矛盾。
+- 若推荐方向 Edge 为负或低于阈值（角球8%、大小球6%、其他4%），必须输出"观望"。
 
-因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态修正 ⑤盘口变动
+因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态 ⑤盘口变动
 
 ${cornerDBText}
 
@@ -535,18 +533,18 @@ Step 5: 平局联动修正：若平局概率 ≥ 25%，总角球 ×0.90（叠加
 Step 6: 若总角球 < 10.0 且无挪超强制规则触发，禁止推荐角球Over
 
 【⚠️ 强制规则】
-1. Edge阈值：角球≥8%、大小球≥6%、其他≥4%。任何盘口Edge低于阈值，强制输出"观望"，不得推荐。
+1. Edge阈值：角球≥8%、大小球≥6%、其他≥4%。低于阈值则观望。
 2. 挪超强制：Rosenborg/Bodø/Glimt/Molde/Brann/Viking 主场对阵后6名 → 总角球≥10.0，可推荐Over。
 3. 胜率优先：若主胜概率≥55%且赔率≥1.50，优先推荐独赢，禁止跳去角球/大小球。
 4. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
 
-【输出要求】只输出JSON。rec.why至少2条。risks至少2条。
+【输出要求】只输出JSON。rec.why至少2条，risks至少2条。
 格式:
-{"gate":"proceed|caution|skip","gate_note":"","motivation":{"home":"","away":""},"news":"","key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},"meta":{"kickoff":"","venue":"","weather":"","referee":"","referee_nat":""},"lineups":{"home":"","away":""},"probs":{"home":0.0,"draw":0.0,"away":0.0},"predicted_score":"","goals":{"exp_total":0.0,"home_exp":0.0,"away_exp":0.0,"over25":0.0,"data_quality":"高|中|低"},"consensus":{"home":0.0,"draw":0.0,"away":0.0,"over25":null,"source":""},"odds_snapshot":{"home":0.0,"draw":0.0,"away":0.0},"markets":[{"m":"","s":"","odds":0.0,"p":0.0,"note":""}],"correct_scores":[],"corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},"rec":{"market":"","sel":"","conf":"高|中|低|观望","why":[""],"stake":""},"risks":[]}`;
+{"gate":"proceed|caution|skip","gate_note":"","motivation":{"home":"","away":""},"news":"","key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},"meta":{"kickoff":"","venue":"","weather":"","referee":"","referee_nat":""},"lineups":{"home":"","away":""},"probs":{"home":0.0,"draw":0.0,"away":0.0},"predicted_score":"","goals":{"exp_total":0.0,"home_exp":0.0,"away_exp":0.0,"over25":0.0,"data_quality":"高|中|低"},"consensus":{"home":0.0,"draw":0.0,"away":0.0,"over25":null,"source":""},"odds_snapshot":{"home":0.0,"draw":0.0,"away":0.0},"markets":[{"m":"盘口名","s":"方向","odds":赔率,"p":概率,"note":"备注"}],"correct_scores":[],"corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},"rec":{"market":"","sel":"","conf":"高|中|低|观望","why":[""],"stake":""},"risks":[]}`;
 }
 
 // ═══════════════════════════════════════════════════
-// JSON 解析（增强容错版）
+// JSON 解析（增强容错）
 // ═══════════════════════════════════════════════════
 function extractJSON(data) {
   var text = (data.content || [])
@@ -809,6 +807,7 @@ function renderResults(){
   var vb = document.getElementById('verify-btn'); if(vb) vb.addEventListener('click', addVerify);
 }
 
+// ── 投注日志 ──
 function recordBet(){
   var r = ST.result; if(!r || !r.rec) return;
   var home = getField('home'), away = getField('away');
@@ -828,6 +827,7 @@ function recordBet(){
   ST.log.unshift(entry); saveLog(ST.log); switchTab('log'); refreshLog();
 }
 
+// ── 验证功能 ──
 function addVerify(){
   var r = ST.result; if(!r) return;
   var home = getField('home'), away = getField('away');
