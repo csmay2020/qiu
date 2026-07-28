@@ -594,8 +594,9 @@ async function callDeepSeek(messages, apiKey) {
     messages: messages,
     max_tokens: 24000,
     temperature: 0.3,
-    tools: [{ type: "web_search_20250305", name: "web_search" }],
-    tool_choice: "auto" // 让模型自动决定何时搜索
+    extra_body: {
+      enable_search: true    // DeepSeek 联网搜索开关
+    }
   };
   var resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
@@ -613,21 +614,12 @@ async function callDeepSeek(messages, apiKey) {
   if(data.error){ throw new Error(data.error.message || JSON.stringify(data.error)); }
   if(!data.choices || !data.choices[0]){ throw new Error('无回复内容'); }
   
-  // 检查是否有工具调用
-  var msg = data.choices[0].message;
-  if (msg.tool_calls && msg.tool_calls.length > 0) {
-    console.log('[DeepSeek] 调用工具:', msg.tool_calls);
-    // 这里可以处理工具调用的结果，但简化版直接返回模型最终回复
-    // 注意：实际需要循环处理工具调用，但为了简化，这里只返回最终内容
-    // 对于真实情况，可能需要实现多轮对话
-  }
-  
+  // 不需要手动处理工具调用，DeepSeek 会自动完成搜索
   return {
-    content: [{ type: 'text', text: msg.content || '' }],
+    content: [{ type: 'text', text: data.choices[0].message.content }],
     stop_reason: data.choices[0].finish_reason || 'stop'
   };
 }
-
 async function runAnalysis(params, dsKey) {
   var prompt = buildPrompt(params);
   var content = [{ type: 'text', text: prompt }];
