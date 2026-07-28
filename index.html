@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 强制搜索版</title>
+<title>盘口价值分析终端 · 搜索修复版</title>
 <!-- Tesseract.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
@@ -53,9 +53,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 强制搜索版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 搜索修复版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">DeepSeek Pro · 强制联网搜索 · 防编造</div>
+  <div style="font-size:10.5px;color:#54678C">DeepSeek Pro · 联网搜索已启用</div>
 </div>
 
 <!-- API Key面板 + OCR引擎选择 -->
@@ -97,7 +97,7 @@ select option{background:#121B2E}
 <!-- 引擎状态条 -->
 <div style="background:#0E1626;border-bottom:1px solid #1E2A44;padding:4px 16px;font-size:10.5px;color:#6FA8F5;display:flex;justify-content:space-between">
   <span id="engine-status">🔍 当前: iOS OCR Server</span>
-  <span>⚙️ 强制搜索已启用</span>
+  <span>⚙️ 联网搜索已启用</span>
 </div>
 
 <div class="tabs">
@@ -586,14 +586,17 @@ function extractJSON(data) {
 }
 
 // ═══════════════════════════════════════════════════
-// API 调用（强制使用 tools）
+// API 调用（DeepSeek Pro + 搜索）
 // ═══════════════════════════════════════════════════
 async function callDeepSeek(messages, apiKey) {
   var body = {
-    model: 'deepseek-v4-pro-search',  // 支持联网搜索的 Pro 模型
+    model: 'deepseek-v4-pro',
     messages: messages,
     max_tokens: 24000,
-    temperature: 0.3
+    temperature: 0.3,
+    extra_body: {
+      enable_search: true
+    }
   };
   var resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
@@ -615,7 +618,9 @@ async function callDeepSeek(messages, apiKey) {
     content: [{ type: 'text', text: data.choices[0].message.content }],
     stop_reason: data.choices[0].finish_reason || 'stop'
   };
-}async function runAnalysis(params, dsKey) {
+}
+
+async function runAnalysis(params, dsKey) {
   var prompt = buildPrompt(params);
   var content = [{ type: 'text', text: prompt }];
   var messages = [{ role: 'user', content: content }];
