@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>盘口价值分析终端 · 防编造版</title>
+<!-- Tesseract.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0B1220;color:#E6EDF7;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
+input,textarea,select,button{font-family:inherit;font-size:14px}
+input::placeholder,textarea::placeholder{color:#54678C}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#F5B84188!important}
+select option{background:#121B2E}
+.wrap{max-width:680px;margin:0 auto;padding:0 14px}
+.card{background:#121B2E;border:1px solid #1E2A44;border-radius:12px;padding:16px;margin-bottom:10px}
+.inp{width:100%;padding:10px 12px;background:#0E1626;border:1px solid #1E2A44;border-radius:9px;color:#E6EDF7;outline:none}
+.sec{font-size:11px;letter-spacing:.18em;color:#54678C;margin:22px 0 10px;font-weight:700}
+.chip{padding:7px 13px;border-radius:999px;border:1px solid #1E2A44;background:transparent;color:#8CA0C0;font-size:12.5px;cursor:pointer;margin:0 3px 6px 0;display:inline-block}
+.chip.on{border-color:#F5B841;background:#F5B84122;color:#F5B841;font-weight:700}
+.btn-p{padding:13px 0;width:100%;border-radius:10px;border:none;background:linear-gradient(135deg,#F5B841,#E09A1F);color:#161006;font-size:15px;font-weight:800;cursor:pointer}
+.btn-p:disabled{background:#2A3654;color:#54678C;cursor:not-allowed}
+.btn-s{padding:6px 12px;border-radius:8px;border:1px solid #1E2A44;background:transparent;color:#8CA0C0;font-size:12px;cursor:pointer}
+.btn-s.small{font-size:11px;padding:4px 10px}
+.gold{color:#F5B841;border-color:#F5B841!important}
+.red{color:#F87171;border-color:#F87171!important}
+.green{color:#34D399;border-color:#34D399!important}
+.blue{color:#6FA8F5;border-color:#6FA8F5!important}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tabs{display:flex;background:#0D1424;border-bottom:1px solid #1E2A44;position:sticky;top:0;z-index:5}
+.tab-btn{flex:1;padding:13px 0;font-size:13px;color:#54678C;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer}
+.tab-btn.on{color:#F5B841;font-weight:800;border-bottom-color:#F5B841}
+.erow{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr 1fr;gap:6px;align-items:center;padding:9px 6px;border-bottom:1px solid #25335280}
+.ebar{width:50px;height:5px;background:#0E1626;border-radius:3px;position:relative;overflow:hidden;display:inline-block}
+.num{font-variant-numeric:tabular-nums;font-family:'SF Mono',Consolas,monospace}
+.slip{background:linear-gradient(160deg,#182543,#121B2E);border:1px solid #F5B84155;border-radius:14px;padding:18px;margin:16px 0 6px;position:relative;overflow:hidden}
+.slip-bar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#F5B841,transparent)}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat-card{background:#0E1626;border-radius:10px;padding:14px 10px;text-align:center;border:1px solid #1E2A44}
+.stat-card .num{font-size:22px;font-weight:900}
+.stat-card .label{font-size:10px;color:#54678C;margin-top:2px}
+.stat-card .sub{font-size:10.5px;color:#8CA0C0;margin-top:2px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;margin:0 2px}
+.badge.green{background:#34D39922;color:#34D399;border:1px solid #34D39955}
+.badge.red{background:#F8717122;color:#F87171;border:1px solid #F8717155}
+.badge.gold{background:#F5B84122;color:#F5B841;border:1px solid #F5B84155}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.pulse{animation:pulse 1.6s infinite}
+</style>
+</head>
+<body>
+
+<div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 防编造版</div>
+  <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
+  <div style="font-size:10.5px;color:#54678C">DeepSeek Pro · 强制防编造 · 数据真实性优先</div>
+</div>
+
+<!-- API Key面板 + OCR引擎选择 -->
+<div id="key-panel" style="background:#0E1626;border-bottom:1px solid #1E2A44">
+  <button id="key-toggle" style="width:100%;padding:9px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+    <span id="key-badge" style="font-size:11.5px;color:#F5B841">⚡ 点击设置 API Key &amp; OCR引擎</span>
+    <span id="key-arrow" style="font-size:10px;color:#54678C">▼</span>
+  </button>
+  <div id="key-body" style="padding:0 16px 12px;display:none">
+    <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">DeepSeek API Key</label>
+      <input id="ds-key-inp" class="inp" type="password" placeholder="sk-…" style="font-size:12px;padding:6px 10px;width:100%">
+    </div>
+    <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:4px">🔍 OCR 引擎选择</label>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:12px;color:#8CA0C0;display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="ocrEngine" value="ios" checked>
+          📱 iOS OCR Server（需iPhone同WiFi）
+        </label>
+        <label style="font-size:12px;color:#8CA0C0;display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="ocrEngine" value="tesseract">
+          🖥️ Tesseract.js（浏览器本地）
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">iOS OCR Server 地址</label>
+      <input id="ios-url-inp" class="inp" value="http://10.0.1.11:8000" style="font-size:12px;padding:6px 10px;width:100%">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-s" id="key-show">显示Key</button>
+      <button class="btn-s red" id="key-clear">清除Key</button>
+    </div>
+    <div style="font-size:10.5px;color:#54678C;margin-top:6px">Keys保存在本地浏览器</div>
+  </div>
+</div>
+
+<!-- 引擎状态条 -->
+<div style="background:#0E1626;border-bottom:1px solid #1E2A44;padding:4px 16px;font-size:10.5px;color:#6FA8F5;display:flex;justify-content:space-between">
+  <span id="engine-status">🔍 当前: iOS OCR Server</span>
+  <span>⚙️ 防编造规则已启用</span>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn on" data-tab="analyze">⚡ 分析</button>
+  <button class="tab-btn" data-tab="log">🧾 日志</button>
+  <button class="tab-btn" data-tab="verify">📊 验证</button>
+</div>
+
+<!-- 分析Tab -->
+<div id="tab-analyze">
+<div class="wrap">
+  <div class="sec">01 · 比赛</div>
+  <div class="card">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span id="league-row"></span></div>
+    <div class="g2" style="margin-bottom:8px">
+      <input class="inp" id="inp-home" placeholder="主队">
+      <input class="inp" id="inp-away" placeholder="客队">
+    </div>
+    <div class="g2">
+      <input class="inp" id="inp-kickoff" placeholder="开赛时间（可选）">
+      <select class="inp" id="inp-ctx"></select>
+    </div>
+  </div>
+
+  <div class="sec">02 · PROLINE+ 盘口</div>
+  <div class="card">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="chip on" id="mode-img">📷 截图上传 (OCR)</button>
+      <button class="chip" id="mode-txt">⌨️ 文字粘贴</button>
+    </div>
+    <div id="odds-img-panel">
+      <input type="file" id="img-file" accept="image/*" multiple style="display:none">
+      <div id="img-preview-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px"></div>
+      <button id="img-add-btn" style="width:100%;padding:22px 0;background:#0E1626;border:1px dashed #1E2A44;border-radius:10px;color:#8CA0C0;font-size:13px;cursor:pointer">
+        点击上传截图（最多8张）<br><span style="font-size:10.5px;color:#54678C">使用选中的OCR引擎识别</span>
+      </button>
+    </div>
+    <div id="odds-txt-panel" style="display:none">
+      <textarea class="inp" id="inp-odds" style="min-height:110px;resize:vertical;font-family:monospace;line-height:1.6" placeholder="粘贴盘口文字…"></textarea>
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <button class="btn-p" id="analyze-btn">开始分析</button>
+    <div id="status-msg" style="display:none;text-align:center;margin-top:10px;font-size:12.5px;color:#F5B841" class="pulse"></div>
+    <div id="error-msg" style="display:none;margin-top:10px;padding:12px;background:#F8717114;border:1px solid #F8717155;border-radius:9px;font-size:12.5px;color:#F87171;word-break:break-all"></div>
+  </div>
+
+  <div id="results-area" style="display:none;margin-top:8px"></div>
+</div>
+</div>
+
+<!-- 日志Tab -->
+<div id="tab-log" style="display:none"><div class="wrap"><div id="log-area"></div></div></div>
+
+<!-- 验证Tab -->
+<div id="tab-verify" style="display:none">
+<div class="wrap">
+  <div class="sec">预测准确率总览</div>
+  <div id="verify-stats" class="stats-grid"></div>
+  <div class="sec">验证记录</div>
+  <div id="verify-area"></div>
+</div>
+</div>
+
+<div style="text-align:center;font-size:10px;color:#54678C;margin-top:30px;padding:0 20px">
+  分析仅供参考 · 理性投注 · 请使用Live Server或http服务器运行
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════
+// 角球数据库
+// ═══════════════════════════════════════════════════
+var CORNER_DB = {
+  "MLS":{
+    "Nashville SC":4.5,"Vancouver Whitecaps":5.33,"Inter Miami":6.13,
+    "SJ Earthquakes":7.06,"Chicago Fire":4.6,"Los Angeles FC":5.88,
+    "Dallas":4.38,"New England":3.93,"Cincinnati":4.5,
+    "Real Salt Lake":4.73,"Seattle Sounders":5.33,"New York City":3.44,
+    "Charlotte":4.75,"Houston Dynamo":4.4,"St. Louis City":5.94,
+    "New York RB":6.06,"Minnesota United":5.31,"DC United":4.56,
+    "Orlando City":3.88,"LA Galaxy":5.29,"Columbus Crew":5.25,
+    "Colorado Rapids":4.88,"Toronto":5.69,"Portland Timbers":4.56,
+    "CF Montreal":5.19,"San Diego":4.56,"Atlanta United":4.94,
+    "Austin":4.25,"Sporting KC":3.81,"Philadelphia Union":5.94
+  },
+  "瑞典甲":{
+    "Sirius":5.31,"Hammarby":5.57,"Häcken":5.62,"Västerås SK":4.5,
+    "AIK":6.15,"Djurgården":7.38,"Malmö FF":4.85,"GAIS":5.14,
+    "Elfsborg":3.86,"Mjällby":5.15,"Brommapojkarna":4.46,
+    "Kalmar":5.31,"IFK Göteborg":5.58,"Degerfors":4.57,
+    "Örgryte":4.08,"Halmstad":3.46
+  },
+  "挪超":{
+    "Bodø/Glimt":7.5,"Vålerenga":7.2,"Brann":6.4,"Viking":6.3,
+    "Sandefjord":6.0,"Rosenborg":5.6,"Tromsø":5.6,"Lillestrøm":5.1,
+    "Molde":5.0,"Sarpsborg 08":4.9,"Aalesund":4.5,"Kristiansund":4.3,
+    "Fredrikstad":4.2,"KFUM":4.2,"HamKam":4.0,"Start":3.4
+  },
+  "英超":{
+    "Manchester City":6.2,"Arsenal":5.8,"Liverpool":5.6,
+    "Chelsea":5.4,"Manchester United":5.2,"Tottenham":5.5,
+    "Newcastle":5.3,"Aston Villa":5.1,"West Ham":4.8,
+    "Brighton":5.0,"Fulham":4.6,"Brentford":4.9,
+    "Wolves":4.5,"Everton":4.4,"Crystal Palace":4.7,
+    "Nottingham Forest":4.3,"Bournemouth":4.8,"Leicester":4.5,
+    "Ipswich":4.2,"Southampton":4.1
+  },
+  "西甲":{
+    "Real Madrid":6.0,"Barcelona":6.3,"Atletico Madrid":5.1,
+    "Athletic Bilbao":5.4,"Villarreal":5.2,"Real Sociedad":5.0,
+    "Betis":5.3,"Valencia":4.7,"Sevilla":5.0,
+    "Girona":5.1,"Celta Vigo":4.8,"Rayo Vallecano":4.5,
+    "Osasuna":4.6,"Mallorca":4.4,"Getafe":4.2,
+    "Deportivo Alaves":4.3,"Espanyol":4.5,"Las Palmas":4.4,
+    "Leganes":4.1,"Valladolid":4.0
+  },
+  "意甲":{
+    "Inter Milan":5.8,"Juventus":5.2,"AC Milan":5.5,
+    "Napoli":5.6,"Atalanta":5.9,"Roma":5.3,
+    "Lazio":5.1,"Fiorentina":5.2,"Torino":4.8,
+    "Bologna":5.0,"Udinese":4.6,"Genoa":4.5,
+    "Cagliari":4.4,"Verona":4.7,"Lecce":4.3,
+    "Como":4.5,"Parma":4.4,"Empoli":4.6,
+    "Venezia":4.2,"Monza":4.5
+  },
+  "德甲":{
+    "Bayern Munich":6.5,"Bayer Leverkusen":6.2,"Borussia Dortmund":6.0,
+    "RB Leipzig":5.8,"Eintracht Frankfurt":5.5,"Borussia Monchengladbach":5.3,
+    "Freiburg":5.0,"Hoffenheim":5.2,"Werder Bremen":5.1,
+    "Augsburg":4.8,"Wolfsburg":5.0,"Mainz":4.9,
+    "Stuttgart":5.4,"Union Berlin":4.7,"Heidenheim":4.6,
+    "St. Pauli":4.8,"Holstein Kiel":4.5,"Bochum":4.4
+  },
+  "法甲":{
+    "Paris Saint-Germain":6.1,"Monaco":5.7,"Marseille":5.5,
+    "Lille":5.3,"Lyon":5.4,"Nice":5.2,
+    "Lens":5.0,"Rennes":4.9,"Strasbourg":4.8,
+    "Nantes":4.7,"Toulouse":4.8,"Brest":4.9,
+    "Montpellier":4.5,"Reims":4.6,"Le Havre":4.4,
+    "Saint-Etienne":4.5,"Angers":4.3,"Auxerre":4.4
+  },
+  "阿根廷甲":{
+    "Argentinos Juniors":5.7,"River Plate":5.7,"Independiente":5.53,
+    "Boca Juniors":5.12,"Unión Santa Fe":5.05,"Instituto":5.0,
+    "Atlético Tucumán":4.75,"Talleres Córdoba":4.53,
+    "Independiente Rivadavia":4.47,"Platense":4.47,
+    "Estudiantes de Río Cuarto":4.44,"Estudiantes":4.41,
+    "Defensa y Justicia":4.29,"Tigre":4.31,"Deportivo Riestra":4.31,
+    "Rosario Central":4.35,"Vélez Sarsfield":4.22,"Racing Club":4.21,
+    "Gimnasia La Plata":4.0,"San Lorenzo":3.88,"Huracán":3.79,
+    "Aldosivi":3.76,"Belgrano":3.71,"Lanús":3.71,"Sarmiento":3.71,
+    "Central Cordoba SdE":3.65,"Banfield":3.53,
+    "Newell's Old Boys":3.44,"Gimnasia y Esgrima Mendoza":3.41,
+    "Barracas Central":2.0
+  }
+};
+
+function lookupCorners(league, home, away){
+  var db = CORNER_DB[league];
+  if(!db) return null;
+  function findTeam(name){
+    if(!name) return null;
+    var n = name.trim();
+    if(db[n] !== undefined) return {team:n, avg:db[n]};
+    var lower = n.toLowerCase();
+    var keys = Object.keys(db);
+    for(var i=0;i<keys.length;i++){
+      if(keys[i].toLowerCase() === lower) return {team:keys[i], avg:db[keys[i]]};
+    }
+    for(var j=0;j<keys.length;j++){
+      if(keys[j].toLowerCase().indexOf(lower) >= 0 || lower.indexOf(keys[j].toLowerCase()) >= 0)
+        return {team:keys[j], avg:db[keys[j]]};
+    }
+    return null;
+  }
+  var h = findTeam(home), a = findTeam(away);
+  if(!h && !a) return null;
+  return {home:h, away:a, total:(h?h.avg:0)+(a?a.avg:0)};
+}
+
+var LEAGUES = ["英超","西甲","意甲","德甲","法甲","欧冠","欧联杯","欧会杯","世界杯","MLS","墨甲","巴西甲","巴西乙","阿根廷甲","阿根廷杯","秘鲁甲","挪超","瑞典甲","瑞典乙","芬超","冰岛超","瑞超","其他"];
+var CTXS = [
+  {v:'regular', l:'联赛常规轮次'},
+  {v:'critical', l:'关键战(争冠/保级/欧战)'},
+  {v:'cup_ko', l:'杯赛淘汰赛(单场淘汰)'},
+  {v:'cup_leg1', l:'杯赛两回合·第一回合'},
+  {v:'cup_leg2', l:'⚠️ 杯赛两回合·第二回合(动机扭曲)'},
+  {v:'derby', l:'⚠️ 德比战'},
+  {v:'new_coach', l:'⚠️ 新教练首秀'},
+  {v:'new_coach_early', l:'⚠️ 新帅磨合期(第2-4场·反弹风险)'},
+  {v:'group_last', l:'小组赛末轮'},
+  {v:'dead', l:'无关痛痒'}
+];
+var CTX_LABEL = {}; CTXS.forEach(function(c){ CTX_LABEL[c.v] = c.l; });
+var MIN_ODDS = 1.3;
+var LOG_KEY = 'vt_log_v4';
+var VERIFY_KEY = 'vt_verify_v4';
+var SNAP_PRE = 'vt_snap_';
+
+var EDGE_THRESHOLD = {
+  'corners': 0.08,
+  'over_under': 0.06,
+  'default': 0.04
+};
+
+var LEAGUE_BASELINE = {
+  "英超":10.2,"西甲":9.8,"意甲":9.9,"德甲":10.5,"法甲":9.6,
+  "MLS":9.9,"巴西甲":10.0,"阿根廷甲":8.5,"墨甲":9.5,
+  "挪超":9.5,"瑞典甲":10.1,"瑞典乙":9.5,"芬超":9.3,
+  "冰岛超":13.0,"瑞超":10.1,"其他":9.5
+};
+
+function getMarketType(marketName){
+  var m = (marketName||"").toLowerCase();
+  if(m.indexOf("角球") >= 0 || m.indexOf("corner") >= 0) return "corners";
+  if((m.indexOf("大") >= 0 || m.indexOf("小") >= 0 || m.indexOf("over") >= 0 || m.indexOf("under") >= 0) && (m.indexOf("球") >= 0 || m.indexOf("goal") >= 0)) return "over_under";
+  return "default";
+}
+function getEdgeThreshold(marketName){ return EDGE_THRESHOLD[getMarketType(marketName)] || EDGE_THRESHOLD.default; }
+
+function pct(x){ return (x == null || isNaN(x)) ? "—" : (x * 100).toFixed(1) + "%"; }
+function imp(o){ return (o && o > 1) ? 1 / o : null; }
+function esc(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dbGet(k){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function dbSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+function getField(id){ var el = document.getElementById('inp-'+id); return el ? el.value.trim() : ''; }
+
+// ── 存储 ──
+function loadLog(){ try{ var r = localStorage.getItem(LOG_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; } }
+function saveLog(arr){ try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); }catch(e){} }
+function loadVerify(){ try{ var r = localStorage.getItem(VERIFY_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; } }
+function saveVerify(arr){ try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); }catch(e){} }
+function getSnap(){ return dbGet(SNAP_PRE + ST.league + '_' + getField('home') + '_' + getField('away')); }
+function setSnap(v){ dbSet(SNAP_PRE + ST.league + '_' + getField('home') + '_' + getField('away'), v); }
+
+// ── 状态 ──
+var ST = {
+  dsKey: localStorage.getItem('ds_key') || '',
+  iosUrl: localStorage.getItem('ios_url') || 'http://10.0.1.11:8000',
+  ocrEngine: localStorage.getItem('ocr_engine') || 'ios',
+  keyVisible: false,
+  keyPanelOpen: !localStorage.getItem('ds_key'),
+  tab: 'analyze',
+  league: '英超',
+  busy: false,
+  statusIdx: 0,
+  result: null,
+  matchLabel: '',
+  log: [],
+  verify: [],
+  oddsMode: 'img',
+  images: []
+};
+
+// ── 工具 ──
+function compressImage(file) {
+  return new Promise(function(resolve, reject) {
+    var r = new FileReader();
+    r.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var MAX = 1568, w = img.width, h = img.height, sc = Math.min(1, MAX / Math.max(w, h));
+        w = Math.round(w * sc); h = Math.round(h * sc);
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        var url = cv.toDataURL('image/jpeg', 0.85);
+        resolve({ b64: url.split(',')[1], type: 'image/jpeg', preview: url });
+      };
+      img.src = e.target.result;
+    };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function refreshImgGrid(){
+  var grid = document.getElementById('img-preview-grid');
+  var addBtn = document.getElementById('img-add-btn');
+  if(!grid) return;
+  grid.innerHTML = '';
+  ST.images.forEach(function(img, i){
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+    var im = document.createElement('img');
+    im.src = img.preview;
+    im.style.cssText = 'width:100%;height:130px;object-fit:cover;object-position:top;border-radius:8px;border:1px solid #1E2A44;display:block';
+    var del = document.createElement('button');
+    del.textContent = '✕';
+    del.style.cssText = 'position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:#000000AA;color:#F87171;font-size:12px;cursor:pointer;line-height:22px;padding:0';
+    del.onclick = function(){ ST.images.splice(i,1); refreshImgGrid(); };
+    var num = document.createElement('div');
+    num.textContent = i+1;
+    num.style.cssText = 'position:absolute;bottom:4px;left:6px;font-size:9.5px;color:#8CA0C0;background:#000000AA;padding:1px 5px;border-radius:5px';
+    wrap.appendChild(im); wrap.appendChild(del); wrap.appendChild(num);
+    grid.appendChild(wrap);
+  });
+  if(addBtn) addBtn.textContent = ST.images.length ? '+ 继续添加 ('+ST.images.length+'/8)' : '点击上传截图（最多8张）';
+}
+
+function setOddsMode(m){
+  ST.oddsMode = m;
+  document.getElementById('odds-img-panel').style.display = m === 'img' ? '' : 'none';
+  document.getElementById('odds-txt-panel').style.display = m === 'txt' ? '' : 'none';
+  document.querySelectorAll('#mode-img, #mode-txt').forEach(function(el){
+    el.className = 'chip' + (el.id === 'mode-' + m ? ' on' : '');
+  });
+}
+
+function edgeColor(e, type){
+  if(e == null) return '#54678C';
+  var threshold = EDGE_THRESHOLD[type] || EDGE_THRESHOLD.default;
+  if(e > threshold * 1.5) return '#34D399';
+  if(e > threshold) return '#F5B841';
+  if(e > 0) return '#FB923C';
+  return '#F87171';
+}
+
+// ═══════════════════════════════════════════════════
+// OCR 引擎
+// ═══════════════════════════════════════════════════
+
+async function ocrIOS(base64Image, serverUrl) {
+  try {
+    console.log('[iOS OCR] 请求开始...');
+    var blobRes = await fetch(base64Image);
+    var blob = await blobRes.blob();
+    var formData = new FormData();
+    formData.append('file', blob, 'screenshot.png');
+    var resp = await fetch(serverUrl + '/upload', { method: 'POST', body: formData });
+    console.log('[iOS OCR] HTTP状态:', resp.status);
+    var text = await resp.text();
+    console.log('[iOS OCR] 原始响应:', text.slice(0, 300));
+    var result;
+    try { result = JSON.parse(text); } catch(e) {
+      if (text.trim().length > 10) return text.trim();
+      return '';
+    }
+    if (result.success && result.ocr_result) return result.ocr_result || '';
+    if (result.text) return result.text;
+    if (result.result) return result.result;
+    if (result.data && result.data.text) return result.data.text;
+    if (typeof result === 'string') return result;
+    return '';
+  } catch(e) {
+    console.error('[iOS OCR] 异常:', e);
+    return '';
+  }
+}
+
+async function ocrTesseract(base64Image) {
+  try {
+    console.log('[Tesseract] 开始识别...');
+    var result = await Tesseract.recognize(base64Image, 'eng');
+    console.log('[Tesseract] 识别完成，置信度:', result.data.confidence);
+    return result.data.text || '';
+  } catch(e) {
+    console.error('[Tesseract] 异常:', e);
+    return '';
+  }
+}
+
+async function recognizeImageWithOCR(base64Image) {
+  var engine = ST.ocrEngine;
+  console.log('[OCR] 使用引擎:', engine);
+  switch(engine) {
+    case 'ios':
+      return await ocrIOS(base64Image, ST.iosUrl);
+    case 'tesseract':
+      return await ocrTesseract(base64Image);
+    default:
+      return '';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// Prompt 构建（包含防编造规则 + 首回合比分强制校验）
+// ═══════════════════════════════════════════════════
+function buildPrompt(params){
+  var today = new Date().toISOString().slice(0,10);
+  var home = params.home, away = params.away, kickoff = params.kickoff, oddsText = params.oddsText, league = params.league, context = params.context;
+  var cornerLookup = lookupCorners(league, home, away);
+  var cornerDBText = '';
+  if(!cornerLookup){
+    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请联网搜索两队角球数据';
+  } else {
+    var lines = ['【⚡ 角球数据库（Statz 2026赛季实测）】'];
+    if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均角球：'+cornerLookup.home.avg
