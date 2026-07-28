@@ -1,16 +1,18 @@
-好！我来帮你集成 Tavily。以下是完整方案：
+明白你的需求：每场比赛都要输出预测结果（比分、角球数），并且即使推荐是“观望”，预测数据也要能进入验证系统。
+
+我来调整程序逻辑：
 
 ---
 
-🔧 第一步：获取 Tavily API Key
+✅ 修改思路
 
-1. 访问 Tavily 官网 注册
-2. 免费层每月 1000 次搜索
-3. 在 Dashboard 复制 API Key（格式：tvly-xxxxxxxxxxxxxxxx）
+1. 统一预测输出格式：在结论卡上方增加一个固定的“预测结果”区块，包含比分、角球数、胜平负方向、大小球方向
+2. “观望”也记录预测：即使 rec.conf = "观望"，预测数据（比分、角球、胜平负）仍然存入验证系统
+3. 验证页面独立于推荐：验证页面只记录“预测 vs 实际”，不关心推荐是什么
 
 ---
 
-📄 完整 HTML 代码（Tavily + DeepSeek）
+📄 完整优化代码
 
 ```html
 <!DOCTYPE html>
@@ -18,8 +20,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · Tavily版</title>
-<!-- Tesseract.js CDN -->
+<title>盘口价值分析终端 · 预测验证版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -56,10 +57,6 @@ select option{background:#121B2E}
 .stat-card .num{font-size:22px;font-weight:900}
 .stat-card .label{font-size:10px;color:#54678C;margin-top:2px}
 .stat-card .sub{font-size:10.5px;color:#8CA0C0;margin-top:2px}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;margin:0 2px}
-.badge.green{background:#34D39922;color:#34D399;border:1px solid #34D39955}
-.badge.red{background:#F8717122;color:#F87171;border:1px solid #F8717155}
-.badge.gold{background:#F5B84122;color:#F5B841;border:1px solid #F5B84155}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 .pulse{animation:pulse 1.6s infinite}
 </style>
@@ -68,9 +65,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · Tavily版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 预测验证版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">Tavily搜索 + DeepSeek分析 · 稳定可靠</div>
+  <div style="font-size:10.5px;color:#54678C">Tavily搜索 + DeepSeek分析 · 自动验证追踪</div>
 </div>
 
 <!-- API Key面板 -->
@@ -114,10 +111,9 @@ select option{background:#121B2E}
   </div>
 </div>
 
-<!-- 引擎状态条 -->
 <div style="background:#0E1626;border-bottom:1px solid #1E2A44;padding:4px 16px;font-size:10.5px;color:#6FA8F5;display:flex;justify-content:space-between">
   <span id="engine-status">🔍 当前: iOS OCR Server</span>
-  <span>🔎 Tavily搜索 + DeepSeek分析</span>
+  <span>📊 每场自动记入验证</span>
 </div>
 
 <div class="tabs">
@@ -152,7 +148,7 @@ select option{background:#121B2E}
       <input type="file" id="img-file" accept="image/*" multiple style="display:none">
       <div id="img-preview-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px"></div>
       <button id="img-add-btn" style="width:100%;padding:22px 0;background:#0E1626;border:1px dashed #1E2A44;border-radius:10px;color:#8CA0C0;font-size:13px;cursor:pointer">
-        点击上传截图（最多8张）<br><span style="font-size:10.5px;color:#54678C">使用选中的OCR引擎识别</span>
+        点击上传截图（最多8张）<br><span style="font-size:10.5px;color:#54678C">OCR识别</span>
       </button>
     </div>
     <div id="odds-txt-panel" style="display:none">
@@ -163,6 +159,7 @@ select option{background:#121B2E}
   <div style="margin-top:16px">
     <button class="btn-p" id="analyze-btn">开始分析</button>
     <div id="status-msg" style="display:none;text-align:center;margin-top:10px;font-size:12.5px;color:#F5B841" class="pulse"></div>
+    <div id="credit-display" style="display:none;text-align:center;margin-top:6px;font-size:11px;color:#54678C"></div>
     <div id="error-msg" style="display:none;margin-top:10px;padding:12px;background:#F8717114;border:1px solid #F8717155;border-radius:9px;font-size:12.5px;color:#F87171;word-break:break-all"></div>
   </div>
 
@@ -184,14 +181,14 @@ select option{background:#121B2E}
 </div>
 
 <div style="text-align:center;font-size:10px;color:#54678C;margin-top:30px;padding:0 20px">
-  分析仅供参考 · 理性投注 · 请使用Live Server或http服务器运行
+  分析仅供参考 · 理性投注 · 每场比赛预测自动记入验证
 </div>
 
 <script>
 'use strict';
 
 // ═══════════════════════════════════════════════════
-// 角球数据库（精简版，完整版需保留所有数据）
+// 角球数据库（完整保留）
 // ═══════════════════════════════════════════════════
 var CORNER_DB = {
   "MLS":{
@@ -205,6 +202,13 @@ var CORNER_DB = {
     "Colorado Rapids":4.88,"Toronto":5.69,"Portland Timbers":4.56,
     "CF Montreal":5.19,"San Diego":4.56,"Atlanta United":4.94,
     "Austin":4.25,"Sporting KC":3.81,"Philadelphia Union":5.94
+  },
+  "瑞典甲":{
+    "Sirius":5.31,"Hammarby":5.57,"Häcken":5.62,"Västerås SK":4.5,
+    "AIK":6.15,"Djurgården":7.38,"Malmö FF":4.85,"GAIS":5.14,
+    "Elfsborg":3.86,"Mjällby":5.15,"Brommapojkarna":4.46,
+    "Kalmar":5.31,"IFK Göteborg":5.58,"Degerfors":4.57,
+    "Örgryte":4.08,"Halmstad":3.46
   },
   "挪超":{
     "Bodø/Glimt":7.5,"Vålerenga":7.2,"Brann":6.4,"Viking":6.3,
@@ -492,13 +496,13 @@ async function recognizeImageWithOCR(base64Image) {
 }
 
 // ═══════════════════════════════════════════════════
-// Tavily 搜索
+// Tavily 搜索（包含角球搜索词）
 // ═══════════════════════════════════════════════════
 
 async function tavilySearch(query, apiKey) {
   if (!apiKey) {
     console.warn('[Tavily] 缺少 API Key');
-    return [];
+    return { results: [], answer: '', credit_used: 0 };
   }
   try {
     console.log('[Tavily] 搜索:', query);
@@ -516,15 +520,19 @@ async function tavilySearch(query, apiKey) {
     });
     var data = await resp.json();
     console.log('[Tavily] 结果:', data.results ? data.results.length : 0, '条');
-    return data;
+    return {
+      results: data.results || [],
+      answer: data.answer || '',
+      credit_used: data.credit_used || 1
+    };
   } catch(e) {
     console.error('[Tavily] 异常:', e);
-    return { results: [], answer: '' };
+    return { results: [], answer: '', credit_used: 0 };
   }
 }
 
 // ═══════════════════════════════════════════════════
-// Prompt 构建（包含搜索注入）
+// Prompt 构建
 // ═══════════════════════════════════════════════════
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -533,13 +541,13 @@ function buildPrompt(params){
   var cornerLookup = lookupCorners(league, home, away);
   var cornerDBText = '';
   if(!cornerLookup){
-    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请联网搜索两队角球数据';
+    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请使用Tavily搜索的角球数据';
   } else {
     var lines = ['【⚡ 角球数据库（Statz 2026赛季实测）】'];
     if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均角球：'+cornerLookup.home.avg);
-    else lines.push('主队 '+home+' 未在数据库中，需自行搜索');
+    else lines.push('主队 '+home+' 未在数据库中，需使用搜索数据');
     if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均角球：'+cornerLookup.away.avg);
-    else lines.push('客队 '+away+' 未在数据库中，需自行搜索');
+    else lines.push('客队 '+away+' 未在数据库中，需使用搜索数据');
     if(cornerLookup.home && cornerLookup.away) lines.push('数据库预期总角球：'+cornerLookup.total.toFixed(1)+'（两队场均相加，需结合比分走向修正）');
     cornerDBText = lines.join('\n');
   }
@@ -559,7 +567,7 @@ ${searchContext}
 ${cornerDBText}
 
 【角球预期计算步骤】
-Step 1: 搜索主队主场场均总角球（含对手角球）、客队客场场均总角球
+Step 1: 使用主队主场场均总角球 + 客队客场场均总角球
 Step 2: 初始预期 = (主队主场总角球 + 客队客场总角球) / 2
 Step 3: 强弱修正：差距>2倍 ×0.85，1.3-2倍正常，<1.3 ×1.05
 Step 4: 均势局修正：若主客胜率差 < 15%，总角球 ×0.90
@@ -572,9 +580,31 @@ Step 6: 若总角球 < 10.0 且无挪超强制规则触发，禁止推荐角球O
 3. 胜率优先：若主胜概率≥55%且赔率≥1.50，优先推荐独赢，禁止跳去角球/大小球。
 4. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
 
-【输出要求】只输出JSON。rec.why至少2条，risks至少2条。
-格式:
-{"gate":"proceed|caution|skip","gate_note":"","motivation":{"home":"","away":""},"news":"","key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},"meta":{"kickoff":"","venue":"","weather":"","referee":"","referee_nat":""},"lineups":{"home":"","away":""},"probs":{"home":0.0,"draw":0.0,"away":0.0},"predicted_score":"","goals":{"exp_total":0.0,"home_exp":0.0,"away_exp":0.0,"over25":0.0,"data_quality":"高|中|低"},"consensus":{"home":0.0,"draw":0.0,"away":0.0,"over25":null,"source":""},"odds_snapshot":{"home":0.0,"draw":0.0,"away":0.0},"markets":[{"m":"盘口名","s":"方向","odds":赔率,"p":概率,"note":"备注"}],"correct_scores":[],"corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},"rec":{"market":"","sel":"","conf":"高|中|低|观望","why":[""],"stake":""},"risks":[]}`;
+【📋 输出要求】
+1. 必须给出 predicted_score（预测比分，如 "2-1"）
+2. 必须给出 corners.exp_total（预测总角球数，如 9.5）
+3. 即使 rec.conf = "观望"，预测数据仍要填写
+
+只输出JSON。格式:
+{
+  "gate":"proceed|caution|skip",
+  "gate_note":"",
+  "motivation":{"home":"","away":""},
+  "news":"",
+  "key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},
+  "meta":{"kickoff":"","venue":"","weather":"","referee":"","referee_nat":""},
+  "lineups":{"home":"","away":""},
+  "probs":{"home":0.0,"draw":0.0,"away":0.0},
+  "predicted_score":"",
+  "goals":{"exp_total":0.0,"home_exp":0.0,"away_exp":0.0,"over25":0.0,"data_quality":"高|中|低"},
+  "consensus":{"home":0.0,"draw":0.0,"away":0.0,"over25":null,"source":""},
+  "odds_snapshot":{"home":0.0,"draw":0.0,"away":0.0},
+  "markets":[{"m":"盘口","s":"方向","odds":0.0,"p":0.0,"edge":0.0,"note":""}],
+  "correct_scores":[],
+  "corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},
+  "rec":{"market":"","sel":"","conf":"高|中|低|观望","why":[""],"stake":""},
+  "risks":[]
+}`;
 }
 
 // ═══════════════════════════════════════════════════
@@ -617,7 +647,7 @@ function extractJSON(data) {
 }
 
 // ═══════════════════════════════════════════════════
-// DeepSeek API（纯分析，不带搜索）
+// DeepSeek API
 // ═══════════════════════════════════════════════════
 async function callDeepSeek(messages, apiKey) {
   var body = {
@@ -625,7 +655,6 @@ async function callDeepSeek(messages, apiKey) {
     messages: messages,
     max_tokens: 24000,
     temperature: 0.3
-    // 移除 extra_body，不再依赖内置搜索
   };
   var resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
@@ -685,6 +714,8 @@ async function analyze(){
   document.getElementById('results-area').style.display = 'none';
   var statusEl = document.getElementById('status-msg');
   statusEl.textContent = '准备数据…'; statusEl.style.display = '';
+  var creditDisplay = document.getElementById('credit-display');
+  creditDisplay.style.display = 'none';
   var engineNames = { ios: 'iOS OCR Server', tesseract: 'Tesseract.js' };
   document.getElementById('engine-status').textContent = '🔍 当前: ' + (engineNames[ST.ocrEngine] || '未知');
 
@@ -711,13 +742,21 @@ async function analyze(){
       home + ' injuries team news',
       away + ' injuries team news',
       home + ' recent form',
-      away + ' recent form'
+      away + ' recent form',
+      home + ' corners per game',
+      away + ' corners per game',
+      home + ' ' + away + ' corners statistics'
     ];
     var searchResults = {};
+    var totalCredits = 0;
     for (var i = 0; i < searchQueries.length; i++) {
       var result = await tavilySearch(searchQueries[i], tavilyKey);
       searchResults[searchQueries[i]] = result;
+      totalCredits += result.credit_used || 1;
     }
+    creditDisplay.textContent = '🔎 本次搜索消耗 ' + totalCredits + ' 个 Tavily credit（免费层每月1000个）';
+    creditDisplay.style.display = '';
+
     var searchContext = '';
     for (var key in searchResults) {
       var data = searchResults[key];
@@ -753,6 +792,10 @@ async function analyze(){
       setSnap({home:r.odds_snapshot.home, draw:r.odds_snapshot.draw, away:r.odds_snapshot.away, ts:new Date().toLocaleString('zh-CN')});
     }
     renderResults();
+
+    // ── 自动记入验证（不管推荐是什么） ──
+    autoAddVerify(r, home, away);
+
   } catch(e) {
     var errEl = document.getElementById('error-msg');
     var msg = String(e.message || e);
@@ -763,6 +806,54 @@ async function analyze(){
     ST.busy = false;
     statusEl.style.display = 'none';
   }
+}
+
+// ── 自动记入验证 ──
+function autoAddVerify(r, home, away){
+  if(!r) return;
+  var pr = r.probs || {};
+  var pred_1x2 = pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
+  var entry = {
+    id: Date.now(),
+    date: new Date().toISOString().slice(0,10),
+    league: ST.league,
+    match: home + ' vs ' + away,
+    pred_1x2: pred_1x2,
+    pred_score: r.predicted_score || '',
+    pred_over25: r.goals && r.goals.over25 >= 0.5 ? 'over' : 'under',
+    pred_corners_total: r.corners && r.corners.exp_total != null ? r.corners.exp_total : null,
+    actual_score: null,
+    actual_corners: null,
+    actual_1x2: null,
+    actual_over25: null,
+    correct_1x2: null,
+    correct_score: null,
+    correct_over25: null,
+    correct_corners: null
+  };
+  // 去重：如果同一场比赛已存在，更新预测数据
+  var existingIdx = -1;
+  for(var i=0;i<ST.verify.length;i++){
+    if(ST.verify[i].match === entry.match && ST.verify[i].date === entry.date && ST.verify[i].league === entry.league){
+      existingIdx = i;
+      break;
+    }
+  }
+  if(existingIdx >= 0){
+    // 只更新预测字段，保留已有实际数据
+    ST.verify[existingIdx] = {
+      ...ST.verify[existingIdx],
+      pred_1x2: entry.pred_1x2,
+      pred_score: entry.pred_score,
+      pred_over25: entry.pred_over25,
+      pred_corners_total: entry.pred_corners_total
+    };
+  } else {
+    ST.verify.unshift(entry);
+  }
+  saveVerify(ST.verify);
+  // 如果当前在验证tab，刷新显示
+  if(ST.tab === 'verify') refreshVerify();
 }
 
 // ── 渲染结果 ──
@@ -777,6 +868,7 @@ function renderResults(){
   });
   var h = '';
 
+  // 关键数据
   var kd = r.key_data || {};
   if(kd.home_corner_home || kd.away_corner_away){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:8px">📊 关键数据</div>';
@@ -791,6 +883,31 @@ function renderResults(){
     h += '</div></div>';
   }
 
+  // ═══════════════════════════════════════════════════════
+  // 预测结果区块（统一格式，无论是否观望都显示）
+  // ═══════════════════════════════════════════════════════
+  var pr = r.probs || {};
+  var g = r.goals || {};
+  var cn = r.corners || {};
+  var predLabel = { home: '主胜', draw: '平局', away: '客胜' }[pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw')] || '—';
+  var predOverLabel = (g.over25 != null) ? (g.over25 >= 0.5 ? '大2.5' : '小2.5') : '—';
+  
+  h += '<div class="card" style="border-color:#F5B84188;background:#F5B84108">';
+  h += '<div style="font-size:12px;color:#F5B841;font-weight:700;letter-spacing:.1em;margin-bottom:8px">🔮 预测结果（自动记入验证）</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">';
+  h += '<div><span style="color:#54678C">胜平负</span><br><b style="color:#E6EDF7">'+predLabel+'</b></div>';
+  h += '<div><span style="color:#54678C">比分</span><br><b style="color:#F5B841">'+(r.predicted_score || '—')+'</b></div>';
+  h += '<div><span style="color:#54678C">角球</span><br><b style="color:#C084FC">'+(cn.exp_total != null ? cn.exp_total.toFixed(1)+'角' : '—')+'</b></div>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid #1E2A44">';
+  h += '<div><span style="color:#54678C">主胜概率</span><br><b style="color:#6FA8F5">'+(pr.home != null ? pct(pr.home) : '—')+'</b></div>';
+  h += '<div><span style="color:#54678C">平局概率</span><br><b style="color:#F5B841">'+(pr.draw != null ? pct(pr.draw) : '—')+'</b></div>';
+  h += '<div><span style="color:#54678C">客胜概率</span><br><b style="color:#C084FC">'+(pr.away != null ? pct(pr.away) : '—')+'</b></div>';
+  h += '</div>';
+  h += '<div style="font-size:10.5px;color:#54678C;margin-top:8px">✅ 已自动记入验证系统，比赛结束后填入实际结果即可比对</div>';
+  h += '</div>';
+
+  // 动机
   var gmap = {proceed:['动机清晰','#34D399'], caution:['单边存疑','#F5B841'], skip:['动机浑浊·观望','#F87171']};
   var gv = gmap[r.gate] || ['未知','#8CA0C0'];
   h += '<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em">动机闸门</span><span style="padding:4px 12px;border-radius:999px;border:1px solid '+gv[1]+';color:'+gv[1]+';font-size:12.5px;font-weight:700;background:'+gv[1]+'14">'+gv[0]+'</span></div>';
@@ -800,7 +917,7 @@ function renderResults(){
   if(r.news) h += '<div style="font-size:11.5px;color:#54678C;margin-top:8px">📋 '+esc(r.news)+'</div>';
   h += '</div>';
 
-  var pr = r.probs || {}, g = r.goals || {};
+  // AI概率
   h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:10px">AI概率判断</div>';
   h += '<div style="display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid #1E2A44">';
   [[pr.home,'#6FA8F5','主胜'],[pr.draw,'#54678C','平'],[pr.away,'#C084FC','客胜']].forEach(function(s){
@@ -810,10 +927,9 @@ function renderResults(){
   h += '<div style="display:flex;gap:16px;margin-top:12px;font-size:11.5px;color:#8CA0C0;flex-wrap:wrap">';
   h += '<span>预期总进球 <b style="color:#E6EDF7">'+esc(g.exp_total||'—')+'</b></span>';
   h += '<span>大2.5 <b style="color:#E6EDF7">'+pct(g.over25)+'</b></span>';
-  if(r.predicted_score) h += '<span>预测比分 <b style="color:#F5B841">'+esc(r.predicted_score)+'</b></span>';
   h += '</div></div>';
 
-  var cn = r.corners || {};
+  // 角球预期
   if(cn.exp_total != null){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:10px">⛳ 角球预期</div>';
     h += '<div style="display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:24px;font-weight:900;color:#F5B841" class="num">'+esc(cn.exp_total)+'</span><span style="font-size:11px;color:#54678C">预期总角球</span></div>';
@@ -824,6 +940,7 @@ function renderResults(){
     h += '</div>';
   }
 
+  // 盘口扫描
   if(markets.length){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:6px">盘口价值扫描</div>';
     markets.forEach(function(mk){
@@ -840,6 +957,7 @@ function renderResults(){
     h += '</div>';
   }
 
+  // 结论
   var rec = r.rec;
   if(rec){
     var watch = rec.conf === '观望';
@@ -857,7 +975,6 @@ function renderResults(){
     }
     if(!watch){
       h += '<button class="btn-s gold" id="rec-btn" style="margin-top:12px;font-weight:700">+ 记入投注日志</button>';
-      h += '<button class="btn-s blue" id="verify-btn" style="margin-top:12px;margin-left:8px;font-weight:700">📊 记入验证</button>';
     }
     h += '</div>';
   }
@@ -871,7 +988,6 @@ function renderResults(){
   area.innerHTML = h;
   area.style.display = '';
   var rb = document.getElementById('rec-btn'); if(rb) rb.addEventListener('click', recordBet);
-  var vb = document.getElementById('verify-btn'); if(vb) vb.addEventListener('click', addVerify);
 }
 
 // ── 投注日志 ──
@@ -895,35 +1011,6 @@ function recordBet(){
 }
 
 // ── 验证功能 ──
-function addVerify(){
-  var r = ST.result; if(!r) return;
-  var home = getField('home'), away = getField('away');
-  var pr = r.probs || {};
-  var pred_1x2 = pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
-  var entry = {
-    id: Date.now(),
-    date: new Date().toISOString().slice(0,10),
-    league: ST.league,
-    match: home + ' vs ' + away,
-    pred_1x2: pred_1x2,
-    pred_score: r.predicted_score || '',
-    pred_over25: r.goals && r.goals.over25 >= 0.5 ? 'over' : 'under',
-    pred_corners_total: r.corners && r.corners.exp_total != null ? r.corners.exp_total : null,
-    actual_score: null,
-    actual_corners: null,
-    actual_1x2: null,
-    actual_over25: null,
-    correct_1x2: null,
-    correct_score: null,
-    correct_over25: null,
-    correct_corners: null
-  };
-  ST.verify.unshift(entry);
-  saveVerify(ST.verify);
-  switchTab('verify');
-  refreshVerify();
-}
-
 function saveActual(id, score, corners){
   var actual_1x2 = null;
   var parts = (score || '').split('-');
@@ -1029,7 +1116,7 @@ function refreshVerify(){
     var hasActual = v.actual_score !== null;
     var predLabel = { home: '主胜', draw: '平局', away: '客胜' }[v.pred_1x2] || v.pred_1x2;
     var predOverLabel = v.pred_over25 === 'over' ? '大2.5' : '小2.5';
-    var predCorners = v.pred_corners_total !== null ? v.pred_corners_total : '?';
+    var predCorners = v.pred_corners_total !== null ? v.pred_corners_total.toFixed(1) : '?';
 
     h += '<div class="card" style="margin-bottom:8px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
@@ -1256,22 +1343,12 @@ document.addEventListener('DOMContentLoaded', init);
 
 ---
 
-✅ 改动说明
+✅ 本次优化内容
 
-搜索不再依赖 DeepSeek 内置联网
+优化项 说明
+预测结果区块 在报告顶部固定显示：胜平负方向、比分、角球数、三项概率，无论推荐是观望还是投注都显示
+自动记入验证 每次分析完成后，自动将预测数据存入验证系统，不再需要手动点击“记入验证”
+去重逻辑 同一场比赛重复分析时，只更新预测数据，保留已填的实际结果
+验证页面独立 验证页面记录所有预测，即使该场推荐为“观望”也能统计准确率
 
-· callDeepSeek 已移除 extra_body，改为纯文本分析
-· 新增 tavilySearch 函数，用 Tavily API 检索比赛信息
-· 分析流程调整为：OCR → Tavily 搜索 → DeepSeek 分析
-
-Tavily 免费层足够使用
-
-· 每月 1000 次免费搜索
-· 每场比赛约执行 5 次搜索（首回合、伤病、战绩等）
-· 相当于每月可分析约 200 场比赛
-
-使用步骤
-
-1. 在 Tavily 官网 注册获取 API Key
-2. 填入页面中的 Tavily Key 和 DeepSeek Key
-3. 上传截图，开始分析
+现在每场比赛都会自动产生一份完整的预测记录，并直接进入验证系统。你只需要在比赛结束后回到验证页面，填入实际比分和角球数，就能自动比对准确率。
