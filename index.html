@@ -861,7 +861,7 @@ async function runAnalysis(params, dsKey) {
 }
 
 // =====================================================================
-// 分析主流程
+// 分析主流程（含缓存 + 角球数据库跳过）
 // =====================================================================
 async function analyze(){
   var dsKey = document.getElementById('ds-key-inp').value.trim();
@@ -875,9 +875,11 @@ async function analyze(){
   localStorage.setItem('ios_url', ST.iosUrl);
   ST.ocrspaceKey = ocrspaceKey;
   localStorage.setItem('ocrspace_key', ocrspaceKey);
+  ST.tavilyKey = tavilyKey;
+  localStorage.setItem('tavily_key', tavilyKey);
 
   if(!dsKey){ alert('请先填入DeepSeek API Key'); return; }
-  if(!tavilyKey){ alert('请先填入Tavily API Key（tavily.com 注册）'); return; }
+  if(!tavilyKey){ alert('请先填入Tavily API Key'); return; }
   if(engine.value === 'ocrspace' && !ocrspaceKey){ alert('请先填入OCR.space API Key'); return; }
   var home = getField('home'), away = getField('away');
   if(!home || !away){ alert('请填写主客队名称'); return; }
@@ -912,55 +914,105 @@ async function analyze(){
     }
     var finalOddsText = ST.oddsMode === 'txt' ? getField('odds') : ocrCombinedText;
 
-    // ── Tavily 搜索 ──
-    statusEl.textContent = '🔎 搜索比赛信息（Tavily）…';
-    var searchQueries = [
-      home + ' vs ' + away + ' head to head',
-      home + ' injuries team news',
-      away + ' injuries team news',
-      home + ' recent form',
-      away + ' recent form',
-      home + ' average corners per game',
-      away + ' average corners per game',
-      home + ' goals per game home',
-      away + ' goals per game away',
-      home + ' over 2.5 percentage',
-      away + ' over 2.5 percentage'
-    ];
-    var searchResults = {};
-    var totalCredits = 0;
-    for (var i = 0; i < searchQueries.length; i++) {
-      var result = await tavilySearch(searchQueries[i], tavilyKey);
-      searchResults[searchQueries[i]] = result;
-      totalCredits += result.credit_used || 1;
-    }
-    creditDisplay.textContent = '🔎 本次搜索消耗 ' + totalCredits + ' 个 Tavily credit（免费层每月1000个）';
-    creditDisplay.style.display = '';
-
+    // ── 缓存 key ──
+    var cacheKey = 'tavily_cache_' + ST.league + '_' + home.toLowerCase() + '_' + away.toLowerCase();
+    var cached = dbGet(cacheKey);
     var searchContext = '';
     var cornerDataFound = false;
-    for (var key in searchResults) {
-      var data = searchResults[key];
-      if (data.answer) {
-        searchContext += '【' + key + '】\n' + data.answer + '\n\n';
+    var totalCredits = 0;
+
+    // 检查缓存是否有效（24小时内）
+    if (cached && cached.ts && (Date.now() - cached.ts < 86400000)) {
+      searchContext = cached.searchContext || '';
+      cornerDataFound = cached.cornerDataFound || false;
+      totalCredits = 0;
+      statusEl.textContent = '📦 使用缓存数据（24小时内有效）';
+      console.log('[缓存] 命中，跳过搜索');
+    } else {
+      // ── 缓存未命中，执行搜索 ──
+      statusEl.textContent = '🔎 搜索比赛信息（Tavily）…';
+
+      // 检查角球数据库
+      var cornerLookup = lookupCorners(ST.league, home, away);
+      var hasCornerDB = !!(cornerLookup && cornerLookup.home && cornerLookup.away);
+
+      // 基础查询（始终需要）
+      var baseQueries = [
+        home + ' vs ' + away + ' head to head',
+        home + ' injuries team news',
+        away + ' injuries team news',
+        home + ' recent form',
+        away + ' recent form'
+      ];
+
+      // 角球/进球相关查询（如果数据库没有，才搜索）
+      var extraQueries = [];
+      if (!hasCornerDB) {
+        extraQueries = [
+          home + ' average corners per game',
+          away + ' average corners per game',
+          home + ' goals per game home',
+          away + ' goals per game away',
+          home + ' over 2.5 percentage',
+          away + ' over 2.5 percentage'
+        ];
+        console.log('[搜索] 数据库无角球数据，执行全部11个查询');
+      } else {
+        console.log('[搜索] 数据库有角球数据，跳过6个角球/进球查询，只执行5个基础查询');
       }
-      if (data.results && data.results.length > 0) {
-        searchContext += '【' + key + ' 来源】\n';
-        data.results.forEach(function(r, idx){
-          searchContext += (idx+1) + '. ' + (r.title || '') + '\n   ' + (r.content || '') + '\n';
-        });
-        searchContext += '\n';
+
+      var allQueries = baseQueries.concat(extraQueries);
+      var searchResults = {};
+
+      for (var i = 0; i < allQueries.length; i++) {
+        var result = await tavilySearch(allQueries[i], tavilyKey);
+        searchResults[allQueries[i]] = result;
+        totalCredits += result.credit_used || 0;
+        if (extraQueries.length > 0 && allQueries[i].indexOf('corners') >= 0 && (result.answer || (result.results && result.results.length > 0))) {
+          cornerDataFound = true;
+        }
       }
-      if (key.indexOf('corners') >= 0 && (data.answer || (data.results && data.results.length > 0))) {
-        cornerDataFound = true;
+      if (hasCornerDB) cornerDataFound = true;
+
+      // 组装 searchContext
+      for (var key in searchResults) {
+        var data = searchResults[key];
+        if (data.answer) {
+          searchContext += '【' + key + '】\n' + data.answer + '\n\n';
+        }
+        if (data.results && data.results.length > 0) {
+          searchContext += '【' + key + ' 来源】\n';
+          data.results.forEach(function(r, idx){
+            searchContext += (idx+1) + '. ' + (r.title || '') + '\n   ' + (r.content || '') + '\n';
+          });
+          searchContext += '\n';
+        }
       }
+
+      if (!searchContext) {
+        searchContext = '搜索无结果，请手动补充关键信息。';
+      }
+
+      // 保存缓存
+      dbSet(cacheKey, {
+        ts: Date.now(),
+        searchContext: searchContext,
+        cornerDataFound: cornerDataFound
+      });
     }
+
     if (!searchContext) {
-      searchContext = '搜索无结果，请手动补充关键信息。';
+      searchContext = '缓存数据为空，请重新分析以获取搜索信息。';
     }
+
     if (!cornerDataFound) {
-      searchContext += '\n【⚠️ 角球数据提示】当前搜索未获取到两队角球数据，建议使用联赛基准线或基于盘口反推。\n';
+      searchContext += '\n【⚠️ 角球数据提示】当前未获取到两队角球数据，建议使用联赛基准线或基于盘口反推。\n';
     }
+
+    creditDisplay.textContent = cached && (Date.now() - cached.ts < 86400000) 
+      ? '📦 使用缓存数据，本次消耗 0 个 Tavily credit' 
+      : '🔎 本次搜索消耗 ' + totalCredits + ' 个 Tavily credit（免费层每月1000个）';
+    creditDisplay.style.display = '';
 
     // ── 读取快照 ──
     var snapData = loadSnapshot(ST.league, home, away);
@@ -1064,7 +1116,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果
+// 渲染结果（同原有，无改动）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1603,9 +1655,11 @@ function init(){
     var tv = document.getElementById('tavily-key-inp');
     var ocr = document.getElementById('ocrspace-key-inp');
     if(ds.type === 'password'){
-      ds.type = 'text'; tv.type = 'text'; ocr.type = 'text'; this.textContent = '隐藏Keys';
+      ds.type = 'text'; tv.type = 'text'; ocr.type = 'text';
+      this.textContent = '隐藏Keys';
     } else {
-      ds.type = 'password'; tv.type = 'password'; ocr.type = 'password'; this.textContent = '显示Keys';
+      ds.type = 'password'; tv.type = 'password'; ocr.type = 'password';
+      this.textContent = '显示Keys';
     }
   });
   document.getElementById('key-clear').addEventListener('click', function(){
