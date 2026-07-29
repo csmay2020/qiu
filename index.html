@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 一致性修复版</title>
+<title>盘口价值分析终端 · 动机扭曲版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -48,9 +48,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 一致性修复版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 动机扭曲版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">Edge强制同步 · 快照信号量化</div>
+  <div style="font-size:10.5px;color:#54678C">动机扭曲案例库 · 快照量化联动</div>
 </div>
 
 <!-- API Key面板 -->
@@ -617,7 +617,7 @@ async function tavilySearch(query, apiKey) {
 }
 
 // =====================================================================
-// Prompt 构建（含快照信号量化指令）
+// Prompt 构建（含动机扭曲案例库）
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -641,7 +641,7 @@ function buildPrompt(params){
   // 快照对比上下文（含量化信号）
   var snapContext = '';
   var snapshotSignal = null;
-  var signalQuantified = null; // 量化后的概率调整建议
+  var signalQuantified = null;
   if(snapData){
     snapContext = '\n【📸 历史快照对比】\n';
     snapContext += '初始快照时间: ' + (snapData.ts || '未知') + '\n';
@@ -661,7 +661,6 @@ function buildPrompt(params){
         snapContext += '信号判断:\n';
         signals.forEach(function(s){ snapContext += '· ' + s.msg + '\n'; });
         snapshotSignal = signals;
-        // 量化信号：客胜被推高 > 20% 时，建议上调客胜概率
         if(dAway > 20){
           var adjust = Math.min(5, Math.floor(dAway / 10));
           signalQuantified = '⚠️ 量化信号：客胜赔率被推高' + dAway.toFixed(0) + '%，建议在基础预测上将客胜概率上调 ' + adjust + ' 个百分点（即 +' + adjust + '%），并重新评估客胜方向的Edge。';
@@ -677,6 +676,50 @@ function buildPrompt(params){
     snapContext += '\n';
   }
 
+  // ── 动机扭曲案例库 ──
+  var motivationCaseLib = `
+【📚 动机扭曲案例库（基于真实比赛复盘，强制执行）】
+
+案例：Lech Poznań vs AGF Aarhus（欧冠资格赛第二回合）
+首回合：Lech Poznań 客场 4-1 获胜，手握 3 球优势
+次回合赛前：主胜赔率从 2.10 大幅降至 1.60（降幅 24%），平赔锁定 3.80 不动，客胜被推高（+36%）
+实际结果：常规时间 0-3，总比分 4-4 进入加时，点球 AGF 获胜
+
+⚠️ 提取的强制规则（适用于任何第二回合/手握≥2球优势的比赛）：
+1. 动机判断优先级 > 赔率变化
+   - 当主队首回合净胜 ≥ 2 球时，次回合的"必须赢"动机显著下降
+   - 即使赔率大幅指向主胜，也不得据此推断"主队会全力进攻"
+   - 若主队稳守即可晋级，预计比赛节奏会偏慢，进球数偏低
+
+2. 平赔锁定是"动机扭曲"的强信号
+   - 当主胜赔率大幅下降（降幅 > 15%）但平赔完全不动（变化 < 2%）时：
+     → 市场在平衡筹码，庄家认为平局（或主队小负）是完全可能的结果
+     → 应将平局概率上调 3-5 个百分点
+     → 主推方向应更审慎
+
+3. 客胜被推高可能是"真实价值信号"
+   - 当客胜赔率升幅 > 20% 时，说明市场在"卖"客胜
+   - 但若客队有明确的翻盘动机，这种推高可能是过度反应
+   - 应将客胜概率上调 2-4 个百分点
+
+4. 实际验证：这场比赛的赔率结构（主胜大降+平赔锁定+客胜推高）
+   → 实际结果验证了平赔锁定信号的有效性（总比分 4-4）
+   → 客胜方向的价值在滚球阶段才体现（常规时间 0-3）
+
+【🚨 强制触发规则】
+若当前比赛满足以下条件，强制触发动机扭曲修正：
+① 比赛情境为 cup_leg2（杯赛第二回合）
+② 主队首回合领先 ≥ 2 球（可从搜索结果中获取）
+③ 主胜赔率 ≤ 1.70 且平赔 ≥ 3.50
+
+触发后必须执行：
+- 主胜概率上限强制设为 55%（即使在 probs 中高于此值，也必须压缩）
+- 平局概率至少上调 5 个百分点
+- 客胜概率至少上调 3 个百分点
+- 在主推卡中增加 ⚠️ 动机扭曲警告
+- over25 概率强制设为 ≤ 50%
+`;
+
   return `你是足球盘口价值分析引擎,服务理性投注者。今天:${today}。
 
 比赛:${league} · ${home}(主) vs ${away}(客)${kickoff ? " · 开赛:" + kickoff : ""}
@@ -689,6 +732,8 @@ ${searchContext}
 
 因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态 ⑤盘口变动
 ⚠️ 快照信号的量化调整建议已在上方标注，请将其纳入概率计算。
+
+${motivationCaseLib}
 
 ${cornerDBText}
 
@@ -704,6 +749,7 @@ ${cornerDBText}
 3. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
 4. rec.main.edge 必须与 markets 数组中对应盘口的 edge 值完全一致，不得自行重算。
 5. 如果 rec.main 的 edge < 0 或低于阈值，conf 填"观望"，但仍应在报告中输出"市场异动提示"。
+6. 杯赛第二回合（cup_leg2）且主队首回合领先≥2球时，强制应用上方动机扭曲修正规则。
 
 【📋 胜率优先模式 · 三区块输出规则】
 区块1 - 主推：从 probs 中选出概率最高的方向，概率≥55%且Edge达标。
@@ -1018,7 +1064,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果（含Edge强制同步）
+// 渲染结果
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1118,7 +1164,7 @@ function renderResults(snapData){
   h += '<span>大2.5 <b style="color:#E6EDF7">'+pct(g.over25)+'</b></span>';
   h += '</div></div>';
 
-  // 角球预期（即使无盘口也展示）
+  // 角球预期
   if(cn.exp_total != null){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:10px">⛳ 角球预期</div>';
     h += '<div style="display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:24px;font-weight:900;color:#F5B841" class="num">'+esc(cn.exp_total)+'</span><span style="font-size:11px;color:#54678C">预期总角球</span></div>';
@@ -1146,7 +1192,7 @@ function renderResults(snapData){
     h += '</div>';
   }
 
-  // ── 三区块结论（含Edge强制同步） ──
+  // ── 三区块结论 ──
   var rec = r.rec;
   if(rec){
     var main = rec.main || {};
@@ -1155,14 +1201,11 @@ function renderResults(snapData){
     var signalAlert = rec.signal_alert || null;
     var isWatch = rec.conf === '观望' || !main.dir;
 
-    // ================================================================
-    // 【强制 Edge 同步】从 markets 数组中覆盖 rec 中的 Edge 值
-    // ================================================================
+    // 强制 Edge 同步
     if (main.dir && markets.length > 0) {
       var mainMarket = null;
       for (var mi = 0; mi < markets.length; mi++) {
         var mk = markets[mi];
-        // 匹配方向名或盘口名包含方向
         if (mk.s === main.dir || mk.m.indexOf(main.dir) >= 0 || main.dir.indexOf(mk.s) >= 0) {
           mainMarket = mk;
           break;
@@ -1172,7 +1215,6 @@ function renderResults(snapData){
         main.edge = mainMarket.edge;
       }
     }
-
     for (var vi = 0; vi < value.length; vi++) {
       var valItem = value[vi];
       if (valItem.market && markets.length > 0) {
@@ -1193,7 +1235,6 @@ function renderResults(snapData){
     h += '<div class="slip"><div class="slip-bar"></div>';
     h += '<div style="font-size:10px;letter-spacing:.25em;color:#54678C;margin-bottom:10px">📋 结论 · 胜率优先模式</div>';
 
-    // 区块1：主推
     if(isWatch){
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #F8717155;margin-bottom:10px">';
       h += '<div style="color:#F87171;font-weight:700;font-size:16px">本场观望</div>';
@@ -1220,19 +1261,14 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 区块2：爆冷预警（含快照触发）
     if(upset && upset.dir){
       h += '<div style="padding:10px 12px;background:#EF444414;border:1px solid #EF444455;border-radius:8px;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#EF4444;font-weight:700;letter-spacing:.08em">⚠️ 爆冷预警</div>';
       h += '<div style="font-size:14px;font-weight:800;color:#EF4444">'+esc(upset.dir)+' <span style="font-size:12px;font-weight:400;color:#8CA0C0">@'+(upset.odds || '—')+'</span></div>';
       h += '<div style="font-size:11.5px;color:#8CA0C0;margin-top:3px">胜率 '+(upset.prob != null ? pct(upset.prob) : '—')+' · '+esc(upset.note||'')+'</div>';
-      if(upset.from_snapshot){
-        h += '<div style="font-size:10px;color:#EF4444;margin-top:4px">📸 基于快照异动信号触发</div>';
-      }
       h += '</div>';
     }
 
-    // 区块2.5：市场异动提示（当快照信号触发但未达爆冷预警条件时）
     if(signalAlert && !upset){
       h += '<div style="padding:10px 12px;background:#F5B84114;border:1px solid #F5B84155;border-radius:8px;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#F5B841;font-weight:700;letter-spacing:.08em">📊 市场异动提示</div>';
@@ -1241,7 +1277,6 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 区块3：价值补充
     if(value && value.length > 0){
       h += '<div style="padding:10px 12px;background:#6FA8F514;border:1px solid #6FA8F544;border-radius:8px">';
       h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em;margin-bottom:6px">📌 价值补充（可选）</div>';
@@ -1254,7 +1289,6 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 推理依据
     var whys = rec.why || [];
     if(whys.length > 0){
       h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #1E2A44">';
