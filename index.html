@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 完整版</title>
+<title>盘口价值分析终端 · 三引擎+快照版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -48,9 +48,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 完整版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 三引擎+快照</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">DeepSeek + Tavily · 快照对比 · 异动信号</div>
+  <div style="font-size:10.5px;color:#54678C">iOS/Tesseract/OCR.space · 快照对比</div>
 </div>
 
 <!-- API Key面板 -->
@@ -70,6 +70,11 @@ select option{background:#121B2E}
       <div style="font-size:10px;color:#6FA8F5;margin-top:2px">免费层每月1000次搜索</div>
     </div>
     <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">OCR.space API Key（可选）</label>
+      <input id="ocrspace-key-inp" class="inp" type="password" placeholder="K…" style="font-size:12px;padding:6px 10px;width:100%">
+      <div style="font-size:10px;color:#6FA8F5;margin-top:2px">免费层每月25000次调用</div>
+    </div>
+    <div style="margin-bottom:6px">
       <label style="font-size:11px;color:#54678C;display:block;margin-bottom:4px">🔍 OCR 引擎选择</label>
       <div style="display:flex;flex-direction:column;gap:4px">
         <label style="font-size:12px;color:#8CA0C0;display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -79,6 +84,10 @@ select option{background:#121B2E}
         <label style="font-size:12px;color:#8CA0C0;display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="radio" name="ocrEngine" value="tesseract">
           🖥️ Tesseract.js（浏览器本地）
+        </label>
+        <label style="font-size:12px;color:#8CA0C0;display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="radio" name="ocrEngine" value="ocrspace">
+          ☁️ OCR.space（云端，需API Key）
         </label>
       </div>
     </div>
@@ -335,9 +344,9 @@ function saveLog(arr){ try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); 
 function loadVerify(){ try{ var r = localStorage.getItem(VERIFY_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; } }
 function saveVerify(arr){ try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); }catch(e){} }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // 快照系统
-// ═══════════════════════════════════════════════════
+// =====================================================================
 function getSnapshotKey(league, home, away){
   return SNAP_PRE + league + '_' + home.trim().toLowerCase() + '_' + away.trim().toLowerCase();
 }
@@ -383,32 +392,11 @@ function updateSnapshotUI(league, home, away){
   }
 }
 
-function extractOddsSnapshot(markets){
-  var home = null, draw = null, away = null;
-  for(var i=0;i<markets.length;i++){
-    var m = markets[i];
-    var name = (m.m || '').toLowerCase();
-    if(name.indexOf('full time') >= 0 || name.indexOf('1x2') >= 0 || name.indexOf('胜平负') >= 0){
-      var sel = (m.s || '').toLowerCase();
-      if(sel.indexOf('home') >= 0 || sel.indexOf('主') >= 0 || sel.indexOf('1') >= 0){
-        if(m.odds) home = m.odds;
-      } else if(sel.indexOf('draw') >= 0 || sel.indexOf('平') >= 0 || sel.indexOf('x') >= 0){
-        if(m.odds) draw = m.odds;
-      } else if(sel.indexOf('away') >= 0 || sel.indexOf('客') >= 0 || sel.indexOf('2') >= 0){
-        if(m.odds) away = m.odds;
-      }
-    }
-  }
-  if(home !== null && draw !== null && away !== null){
-    return {home: home, draw: draw, away: away};
-  }
-  return null;
-}
-
 // ── 状态 ──
 var ST = {
   dsKey: localStorage.getItem('ds_key') || '',
   tavilyKey: localStorage.getItem('tavily_key') || '',
+  ocrspaceKey: localStorage.getItem('ocrspace_key') || '',
   iosUrl: localStorage.getItem('ios_url') || 'http://10.0.1.11:8000',
   ocrEngine: localStorage.getItem('ocr_engine') || 'ios',
   keyVisible: false,
@@ -489,10 +477,11 @@ function edgeColor(e, type){
   return '#F87171';
 }
 
-// ═══════════════════════════════════════════════════
-// OCR 引擎
-// ═══════════════════════════════════════════════════
+// =====================================================================
+// 三引擎 OCR
+// =====================================================================
 
+// 1. iOS OCR Server
 async function ocrIOS(base64Image, serverUrl) {
   try {
     console.log('[iOS OCR] 请求开始...');
@@ -521,6 +510,7 @@ async function ocrIOS(base64Image, serverUrl) {
   }
 }
 
+// 2. Tesseract.js
 async function ocrTesseract(base64Image) {
   try {
     console.log('[Tesseract] 开始识别...');
@@ -533,6 +523,48 @@ async function ocrTesseract(base64Image) {
   }
 }
 
+// 3. OCR.space
+async function ocrSpace(base64Image, apiKey) {
+  if (!apiKey) {
+    console.warn('[OCR.space] 缺少 API Key');
+    return '';
+  }
+  try {
+    console.log('[OCR.space] 开始识别...');
+    var blobRes = await fetch(base64Image);
+    var blob = await blobRes.blob();
+    var formData = new FormData();
+    formData.append('file', blob, 'screenshot.png');
+    formData.append('apikey', apiKey);
+    formData.append('language', 'eng');
+    formData.append('OCREngine', '2');
+    var resp = await fetch('https://api.ocr.space/parse/image', {
+      method: 'POST',
+      body: formData
+    });
+    console.log('[OCR.space] HTTP状态:', resp.status);
+    if (!resp.ok) {
+      var errText = await resp.text();
+      console.error('[OCR.space] 请求失败:', resp.status, errText);
+      return '';
+    }
+    var result = await resp.json();
+    console.log('[OCR.space] 返回码:', result.OCRExitCode);
+    if (result.OCRExitCode === 1 && result.ParsedResults && result.ParsedResults.length > 0) {
+      var text = result.ParsedResults[0].ParsedText || '';
+      console.log('[OCR.space] 识别成功，文本长度:', text.length);
+      return text;
+    } else {
+      console.error('[OCR.space] 识别失败:', result.ErrorMessage);
+      return '';
+    }
+  } catch(e) {
+    console.error('[OCR.space] 异常:', e);
+    return '';
+  }
+}
+
+// 主 OCR 路由
 async function recognizeImageWithOCR(base64Image) {
   var engine = ST.ocrEngine;
   console.log('[OCR] 使用引擎:', engine);
@@ -541,14 +573,16 @@ async function recognizeImageWithOCR(base64Image) {
       return await ocrIOS(base64Image, ST.iosUrl);
     case 'tesseract':
       return await ocrTesseract(base64Image);
+    case 'ocrspace':
+      return await ocrSpace(base64Image, ST.ocrspaceKey);
     default:
       return '';
   }
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // Tavily 搜索
-// ═══════════════════════════════════════════════════
+// =====================================================================
 
 async function tavilySearch(query, apiKey) {
   if (!apiKey) {
@@ -582,9 +616,9 @@ async function tavilySearch(query, apiKey) {
   }
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // Prompt 构建
-// ═══════════════════════════════════════════════════
+// =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
   var home = params.home, away = params.away, kickoff = params.kickoff, oddsText = params.oddsText, league = params.league, context = params.context;
@@ -604,7 +638,7 @@ function buildPrompt(params){
     cornerDBText = lines.join('\n');
   }
 
-  // 构建快照对比上下文
+  // 快照对比上下文
   var snapContext = '';
   if(snapData){
     snapContext = '\n【📸 历史快照对比】\n';
@@ -654,7 +688,6 @@ ${cornerDBText}
 3. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
 
 【📋 胜率优先模式 · 三区块输出规则】
-
 区块1 - 主推：从 probs 中选出概率最高的方向，概率≥55%且Edge达标。
 区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
@@ -681,9 +714,9 @@ ${cornerDBText}
 }`;
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // JSON 解析
-// ═══════════════════════════════════════════════════
+// =====================================================================
 function extractJSON(data) {
   var text = (data.content || [])
     .filter(function(b){ return b.type === 'text'; })
@@ -720,9 +753,9 @@ function extractJSON(data) {
   }
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // DeepSeek API
-// ═══════════════════════════════════════════════════
+// =====================================================================
 async function callDeepSeek(messages, apiKey) {
   var body = {
     model: 'deepseek-v4-pro',
@@ -763,21 +796,25 @@ async function runAnalysis(params, dsKey) {
   return extractJSON(data);
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // 分析主流程
-// ═══════════════════════════════════════════════════
+// =====================================================================
 async function analyze(){
   var dsKey = document.getElementById('ds-key-inp').value.trim();
   var tavilyKey = document.getElementById('tavily-key-inp').value.trim();
+  var ocrspaceKey = document.getElementById('ocrspace-key-inp').value.trim();
   var engine = document.querySelector('input[name="ocrEngine"]:checked');
   if(!engine){ alert('请选择OCR引擎'); return; }
   ST.ocrEngine = engine.value;
   localStorage.setItem('ocr_engine', ST.ocrEngine);
   ST.iosUrl = document.getElementById('ios-url-inp').value.trim();
   localStorage.setItem('ios_url', ST.iosUrl);
+  ST.ocrspaceKey = ocrspaceKey;
+  localStorage.setItem('ocrspace_key', ocrspaceKey);
 
   if(!dsKey){ alert('请先填入DeepSeek API Key'); return; }
   if(!tavilyKey){ alert('请先填入Tavily API Key（tavily.com 注册）'); return; }
+  if(engine.value === 'ocrspace' && !ocrspaceKey){ alert('请先填入OCR.space API Key'); return; }
   var home = getField('home'), away = getField('away');
   if(!home || !away){ alert('请填写主客队名称'); return; }
 
@@ -792,7 +829,7 @@ async function analyze(){
   statusEl.textContent = '准备数据…'; statusEl.style.display = '';
   var creditDisplay = document.getElementById('credit-display');
   creditDisplay.style.display = 'none';
-  var engineNames = { ios: 'iOS OCR Server', tesseract: 'Tesseract.js' };
+  var engineNames = { ios: 'iOS OCR Server', tesseract: 'Tesseract.js', ocrspace: 'OCR.space' };
   document.getElementById('engine-status').textContent = '🔍 当前: ' + (engineNames[ST.ocrEngine] || '未知');
 
   try {
@@ -864,7 +901,6 @@ async function analyze(){
     // ── 读取快照 ──
     var snapData = loadSnapshot(ST.league, home, away);
     var currentOdds = null;
-    // 尝试从OCR文本中提取当前赔率
     if(finalOddsText){
       var oddsMatches = finalOddsText.match(/Full Time[\s\S]*?(?:主胜|Home)[\s]*([\d.]+)[\s]*平|Draw[\s]*([\d.]+)[\s]*客胜|Away[\s]*([\d.]+)/i);
       if(oddsMatches){
@@ -963,9 +999,9 @@ function autoAddVerify(r, home, away){
   if(ST.tab === 'verify') refreshVerify();
 }
 
-// ═══════════════════════════════════════════════════
+// =====================================================================
 // 渲染结果
-// ═══════════════════════════════════════════════════
+// =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
   var area = document.getElementById('results-area'); if(!area) return;
@@ -1425,7 +1461,7 @@ function toggleKeyPanel(){
 function updateEngineStatus(){
   var engine = document.querySelector('input[name="ocrEngine"]:checked');
   if(!engine) return;
-  var names = { ios: 'iOS OCR Server', tesseract: 'Tesseract.js' };
+  var names = { ios: 'iOS OCR Server', tesseract: 'Tesseract.js', ocrspace: 'OCR.space' };
   document.getElementById('engine-status').textContent = '🔍 当前: ' + (names[engine.value] || '未知');
 }
 
@@ -1433,13 +1469,15 @@ function init(){
   ST.log = loadLog(); ST.verify = loadVerify();
   var dsKey = localStorage.getItem('ds_key') || '';
   var tavilyKey = localStorage.getItem('tavily_key') || '';
+  var ocrspaceKey = localStorage.getItem('ocrspace_key') || '';
   var iosUrl = localStorage.getItem('ios_url') || 'http://10.0.1.11:8000';
   var engine = localStorage.getItem('ocr_engine') || 'ios';
 
   document.getElementById('ds-key-inp').value = dsKey;
   document.getElementById('tavily-key-inp').value = tavilyKey;
+  document.getElementById('ocrspace-key-inp').value = ocrspaceKey;
   document.getElementById('ios-url-inp').value = iosUrl;
-  ST.dsKey = dsKey; ST.tavilyKey = tavilyKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine;
+  ST.dsKey = dsKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine;
   updateKeyUI();
 
   var radios = document.querySelectorAll('input[name="ocrEngine"]');
@@ -1490,18 +1528,21 @@ function init(){
   document.getElementById('key-show').addEventListener('click', function(){
     var ds = document.getElementById('ds-key-inp');
     var tv = document.getElementById('tavily-key-inp');
+    var ocr = document.getElementById('ocrspace-key-inp');
     if(ds.type === 'password'){
-      ds.type = 'text'; tv.type = 'text'; this.textContent = '隐藏Keys';
+      ds.type = 'text'; tv.type = 'text'; ocr.type = 'text'; this.textContent = '隐藏Keys';
     } else {
-      ds.type = 'password'; tv.type = 'password'; this.textContent = '显示Keys';
+      ds.type = 'password'; tv.type = 'password'; ocr.type = 'password'; this.textContent = '显示Keys';
     }
   });
   document.getElementById('key-clear').addEventListener('click', function(){
     localStorage.removeItem('ds_key');
     localStorage.removeItem('tavily_key');
+    localStorage.removeItem('ocrspace_key');
     document.getElementById('ds-key-inp').value = '';
     document.getElementById('tavily-key-inp').value = '';
-    ST.dsKey = ''; ST.tavilyKey = '';
+    document.getElementById('ocrspace-key-inp').value = '';
+    ST.dsKey = ''; ST.tavilyKey = ''; ST.ocrspaceKey = '';
     updateKeyUI();
   });
   document.getElementById('ds-key-inp').addEventListener('input', function(){
@@ -1513,6 +1554,10 @@ function init(){
     localStorage.setItem('tavily_key', this.value);
     ST.tavilyKey = this.value;
     updateKeyUI();
+  });
+  document.getElementById('ocrspace-key-inp').addEventListener('input', function(){
+    localStorage.setItem('ocrspace_key', this.value);
+    ST.ocrspaceKey = this.value;
   });
   document.getElementById('ios-url-inp').addEventListener('input', function(){
     localStorage.setItem('ios_url', this.value);
@@ -1572,4 +1617,4 @@ function init(){
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
-</html>s
+</html>
