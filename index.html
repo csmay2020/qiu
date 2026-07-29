@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 三引擎+快照版</title>
+<title>盘口价值分析终端 · 联动修复版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -48,9 +48,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 三引擎+快照</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 联动修复版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">iOS/Tesseract/OCR.space · 快照对比</div>
+  <div style="font-size:10.5px;color:#54678C">快照联动 · Edge一致性 · 角球独立展示</div>
 </div>
 
 <!-- API Key面板 -->
@@ -617,7 +617,7 @@ async function tavilySearch(query, apiKey) {
 }
 
 // =====================================================================
-// Prompt 构建
+// Prompt 构建（含快照联动指令）
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -638,8 +638,9 @@ function buildPrompt(params){
     cornerDBText = lines.join('\n');
   }
 
-  // 快照对比上下文
+  // 快照对比上下文（含信号触发）
   var snapContext = '';
+  var snapshotSignal = null; // 用于存储检测到的异动信号
   if(snapData){
     snapContext = '\n【📸 历史快照对比】\n';
     snapContext += '初始快照时间: ' + (snapData.ts || '未知') + '\n';
@@ -651,16 +652,33 @@ function buildPrompt(params){
       var dAway = ((params.currentOdds.away - snapData.away) / snapData.away * 100);
       snapContext += '变化: 主胜 ' + (dHome > 0 ? '+' : '') + dHome.toFixed(1) + '% | 平局 ' + (dDraw > 0 ? '+' : '') + dDraw.toFixed(1) + '% | 客胜 ' + (dAway > 0 ? '+' : '') + dAway.toFixed(1) + '%\n';
       var signals = [];
-      if(dHome < -10) signals.push('主胜大幅下降（' + Math.abs(dHome).toFixed(0) + '%），市场高度集中主胜');
-      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push('平赔锁定（变化仅' + dDraw.toFixed(1) + '%），庄家平衡筹码信号');
-      if(dAway > 5) signals.push('客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估');
-      if(dHome < -5 && dDraw < 2 && dAway > 3) signals.push('⚠️ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估');
+      if(dHome < -10) signals.push({type:'home_overheat', msg:'主胜大幅下降（' + Math.abs(dHome).toFixed(0) + '%），市场高度集中主胜，存在过热可能'});
+      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push({type:'draw_lock', msg:'平赔锁定（变化仅' + dDraw.toFixed(1) + '%），庄家平衡筹码信号'});
+      if(dAway > 5) signals.push({type:'away_pushed', msg:'客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估'});
+      if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push({type:'overheat_combo', msg:'⚠️ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估'});
       if(signals.length){
         snapContext += '信号判断:\n';
-        signals.forEach(function(s){ snapContext += '· ' + s + '\n'; });
+        signals.forEach(function(s){ snapContext += '· ' + s.msg + '\n'; });
+        // 存储信号供后续使用
+        snapshotSignal = signals;
       }
     }
     snapContext += '\n';
+  }
+
+  // 将信号注入到指令中
+  var signalInstruction = '';
+  if(snapshotSignal && snapshotSignal.length > 0){
+    signalInstruction = '\n【⚠️ 快照信号联动指令】\n';
+    signalInstruction += '检测到以下盘口异动信号，请在结论卡中按规则处理：\n';
+    snapshotSignal.forEach(function(s){
+      signalInstruction += '- ' + s.msg + '\n';
+    });
+    signalInstruction += '\n处理规则：\n';
+    signalInstruction += '1. 若存在"客胜被推高"信号，且客胜概率≥10%，必须将客胜放入爆冷预警区块，并标注"基于快照异动信号"。\n';
+    signalInstruction += '2. 若客胜被推高但客胜概率<10%，在结论卡中添加"市场异动提示"区块，提示用户关注客胜赔率变化方向。\n';
+    signalInstruction += '3. 若存在"主胜过热"信号，在主推卡中增加"⚠️ 主胜过热"警告，建议轻注或观望。\n';
+    signalInstruction += '4. 快照信号不改变主推判断（仍按胜率优先规则），但必须作为风险因素在报告中体现。\n';
   }
 
   return `你是足球盘口价值分析引擎,服务理性投注者。今天:${today}。
@@ -669,6 +687,7 @@ function buildPrompt(params){
 比赛情境:${CTX_LABEL[context] || context}
 ${oddsText ? "【PROLINE+盘口实价（OCR识别）】\n" + oddsText : "【未提供盘口实价，markets中odds填null】"}
 ${snapContext}
+${signalInstruction}
 
 【🔎 搜索结果（Tavily 实时检索）】
 ${searchContext}
@@ -681,15 +700,18 @@ ${cornerDBText}
 - 若数据库和搜索均有数据，优先使用搜索数据
 - 若只有数据库数据，使用数据库数据并标注"来源：数据库"
 - 若两者都无，标注"角球数据缺失"并禁止推荐角球
+- 即使无角球盘口，也应在报告中展示预期角球数作为参考
 
 【⚠️ 强制规则】
 1. Edge阈值：角球≥8%、大小球≥6%、其他≥4%。低于阈值则观望。
 2. 挪超强制：Rosenborg/Bodø/Glimt/Molde/Brann/Viking 主场对阵后6名 → 总角球≥10.0，可推荐Over。
 3. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
+4. rec.main.edge 必须与 markets 数组中对应盘口的 edge 值完全一致，不得自行重算。
+5. 如果 rec.main 的 edge < 0 或低于阈值，conf 填"观望"，但仍应在报告中输出"市场异动提示"。
 
 【📋 胜率优先模式 · 三区块输出规则】
 区块1 - 主推：从 probs 中选出概率最高的方向，概率≥55%且Edge达标。
-区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00。
+区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00，或快照信号触发（客胜被推高且客胜概率≥10%）。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
 
 只输出JSON。格式:
@@ -709,7 +731,7 @@ ${cornerDBText}
   "markets":[{"m":"盘口","s":"方向","odds":0.0,"p":0.0,"edge":0.0,"note":""}],
   "correct_scores":[],
   "corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},
-  "rec":{"main":{"dir":"","odds":0,"prob":0,"edge":0,"note":""},"upset":null,"value":[],"conf":"","stake":""},
+  "rec":{"main":{"dir":"","odds":0,"prob":0,"edge":0,"note":""},"upset":null,"value":[],"conf":"","stake":"","signal_alert":null},
   "risks":[]
 }`;
 }
@@ -1000,7 +1022,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果
+// 渲染结果（含快照联动展示）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1044,13 +1066,13 @@ function renderResults(snapData){
       h += '<div><span style="color:#54678C">客胜</span><br><span style="color:#8CA0C0">'+snap.away+' → '+current.away+'</span><br><span style="color:'+(dAway>5?'#34D399':dAway<-5?'#F87171':'#8CA0C0')+'">'+(dAway>0?'+':'')+dAway.toFixed(1)+'%</span></div>';
       h += '</div>';
       var signals = [];
-      if(dHome < -10) signals.push('⚠️ 主胜大幅下降（' + Math.abs(dHome).toFixed(0) + '%），市场高度集中主胜，存在过热可能');
-      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push('🔒 平赔锁定（变化仅' + dDraw.toFixed(1) + '%），庄家平衡筹码信号');
-      if(dAway > 5) signals.push('📈 客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估');
-      if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push('⚡ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估');
+      if(dHome < -10) signals.push({type:'home_overheat', msg:'⚠️ 主胜大幅下降（' + Math.abs(dHome).toFixed(0) + '%），市场高度集中主胜，存在过热可能'});
+      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push({type:'draw_lock', msg:'🔒 平赔锁定（变化仅' + dDraw.toFixed(1) + '%），庄家平衡筹码信号'});
+      if(dAway > 5) signals.push({type:'away_pushed', msg:'📈 客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估'});
+      if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push({type:'overheat_combo', msg:'⚡ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估'});
       if(signals.length){
         h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1E2A44">';
-        signals.forEach(function(s){ h += '<div style="font-size:11px;color:#E6EDF7;padding:2px 0">'+s+'</div>'; });
+        signals.forEach(function(s){ h += '<div style="font-size:11px;color:'+(s.type==='away_pushed'?'#34D399':s.type==='home_overheat'?'#F87171':'#F5B841')+';padding:2px 0">'+s.msg+'</div>'; });
         h += '</div>';
       }
       h += '</div>';
@@ -1100,7 +1122,7 @@ function renderResults(snapData){
   h += '<span>大2.5 <b style="color:#E6EDF7">'+pct(g.over25)+'</b></span>';
   h += '</div></div>';
 
-  // 角球
+  // 角球预期（即使无盘口也展示）
   if(cn.exp_total != null){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:10px">⛳ 角球预期</div>';
     h += '<div style="display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:24px;font-weight:900;color:#F5B841" class="num">'+esc(cn.exp_total)+'</span><span style="font-size:11px;color:#54678C">预期总角球</span></div>';
@@ -1111,7 +1133,7 @@ function renderResults(snapData){
     h += '</div>';
   }
 
-  // 盘口扫描
+  // 盘口价值扫描
   if(markets.length){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:6px">盘口价值扫描</div>';
     markets.forEach(function(mk){
@@ -1134,9 +1156,10 @@ function renderResults(snapData){
     var main = rec.main || {};
     var upset = rec.upset;
     var value = rec.value || [];
+    var signalAlert = rec.signal_alert || null;
     var isWatch = rec.conf === '观望' || !main.dir;
 
-    // 同步 Edge
+    // 从 markets 同步 Edge（强制一致性）
     if (main.dir && markets.length > 0) {
       var mainMarket = null;
       for (var mi = 0; mi < markets.length; mi++) {
@@ -1170,6 +1193,7 @@ function renderResults(snapData){
     h += '<div class="slip"><div class="slip-bar"></div>';
     h += '<div style="font-size:10px;letter-spacing:.25em;color:#54678C;margin-bottom:10px">📋 结论 · 胜率优先模式</div>';
 
+    // 区块1：主推
     if(isWatch){
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #F8717155;margin-bottom:10px">';
       h += '<div style="color:#F87171;font-weight:700;font-size:16px">本场观望</div>';
@@ -1196,14 +1220,28 @@ function renderResults(snapData){
       h += '</div>';
     }
 
+    // 区块2：爆冷预警（含快照触发）
     if(upset && upset.dir){
       h += '<div style="padding:10px 12px;background:#EF444414;border:1px solid #EF444455;border-radius:8px;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#EF4444;font-weight:700;letter-spacing:.08em">⚠️ 爆冷预警</div>';
       h += '<div style="font-size:14px;font-weight:800;color:#EF4444">'+esc(upset.dir)+' <span style="font-size:12px;font-weight:400;color:#8CA0C0">@'+(upset.odds || '—')+'</span></div>';
       h += '<div style="font-size:11.5px;color:#8CA0C0;margin-top:3px">胜率 '+(upset.prob != null ? pct(upset.prob) : '—')+' · '+esc(upset.note||'')+'</div>';
+      if(upset.from_snapshot){
+        h += '<div style="font-size:10px;color:#EF4444;margin-top:4px">📸 基于快照异动信号触发</div>';
+      }
       h += '</div>';
     }
 
+    // 区块2.5：市场异动提示（当快照信号触发但未达爆冷预警条件时）
+    if(signalAlert && !upset){
+      h += '<div style="padding:10px 12px;background:#F5B84114;border:1px solid #F5B84155;border-radius:8px;margin-bottom:10px">';
+      h += '<div style="font-size:10px;color:#F5B841;font-weight:700;letter-spacing:.08em">📊 市场异动提示</div>';
+      h += '<div style="font-size:13px;color:#E6EDF7;margin-top:4px">'+esc(signalAlert)+'</div>';
+      h += '<div style="font-size:11px;color:#8CA0C0;margin-top:4px">💡 建议：关注异动方向，若赛前赔率继续向该方向移动，可重新评估</div>';
+      h += '</div>';
+    }
+
+    // 区块3：价值补充
     if(value && value.length > 0){
       h += '<div style="padding:10px 12px;background:#6FA8F514;border:1px solid #6FA8F544;border-radius:8px">';
       h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em;margin-bottom:6px">📌 价值补充（可选）</div>';
@@ -1216,6 +1254,7 @@ function renderResults(snapData){
       h += '</div>';
     }
 
+    // 推理依据
     var whys = rec.why || [];
     if(whys.length > 0){
       h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #1E2A44">';
