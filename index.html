@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>盘口价值分析终端 · 联动修复版</title>
+<title>盘口价值分析终端 · 一致性修复版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -48,9 +48,9 @@ select option{background:#121B2E}
 
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
-  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 联动修复版</div>
+  <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 一致性修复版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">快照联动 · Edge一致性 · 角球独立展示</div>
+  <div style="font-size:10.5px;color:#54678C">Edge强制同步 · 快照信号量化</div>
 </div>
 
 <!-- API Key面板 -->
@@ -617,7 +617,7 @@ async function tavilySearch(query, apiKey) {
 }
 
 // =====================================================================
-// Prompt 构建（含快照联动指令）
+// Prompt 构建（含快照信号量化指令）
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -638,9 +638,10 @@ function buildPrompt(params){
     cornerDBText = lines.join('\n');
   }
 
-  // 快照对比上下文（含信号触发）
+  // 快照对比上下文（含量化信号）
   var snapContext = '';
-  var snapshotSignal = null; // 用于存储检测到的异动信号
+  var snapshotSignal = null;
+  var signalQuantified = null; // 量化后的概率调整建议
   if(snapData){
     snapContext = '\n【📸 历史快照对比】\n';
     snapContext += '初始快照时间: ' + (snapData.ts || '未知') + '\n';
@@ -659,26 +660,21 @@ function buildPrompt(params){
       if(signals.length){
         snapContext += '信号判断:\n';
         signals.forEach(function(s){ snapContext += '· ' + s.msg + '\n'; });
-        // 存储信号供后续使用
         snapshotSignal = signals;
+        // 量化信号：客胜被推高 > 20% 时，建议上调客胜概率
+        if(dAway > 20){
+          var adjust = Math.min(5, Math.floor(dAway / 10));
+          signalQuantified = '⚠️ 量化信号：客胜赔率被推高' + dAway.toFixed(0) + '%，建议在基础预测上将客胜概率上调 ' + adjust + ' 个百分点（即 +' + adjust + '%），并重新评估客胜方向的Edge。';
+          snapContext += '\n【📊 量化调整建议】\n' + signalQuantified + '\n';
+        }
+        if(dHome < -15){
+          var adjustHome = Math.min(3, Math.floor(Math.abs(dHome) / 10));
+          signalQuantified = (signalQuantified || '') + '\n⚠️ 量化信号：主胜赔率大幅下降' + Math.abs(dHome).toFixed(0) + '%，市场过热，建议主胜概率下调 ' + adjustHome + ' 个百分点（即 -' + adjustHome + '%），主推方向需重新评估Edge。';
+          snapContext += '\n' + signalQuantified + '\n';
+        }
       }
     }
     snapContext += '\n';
-  }
-
-  // 将信号注入到指令中
-  var signalInstruction = '';
-  if(snapshotSignal && snapshotSignal.length > 0){
-    signalInstruction = '\n【⚠️ 快照信号联动指令】\n';
-    signalInstruction += '检测到以下盘口异动信号，请在结论卡中按规则处理：\n';
-    snapshotSignal.forEach(function(s){
-      signalInstruction += '- ' + s.msg + '\n';
-    });
-    signalInstruction += '\n处理规则：\n';
-    signalInstruction += '1. 若存在"客胜被推高"信号，且客胜概率≥10%，必须将客胜放入爆冷预警区块，并标注"基于快照异动信号"。\n';
-    signalInstruction += '2. 若客胜被推高但客胜概率<10%，在结论卡中添加"市场异动提示"区块，提示用户关注客胜赔率变化方向。\n';
-    signalInstruction += '3. 若存在"主胜过热"信号，在主推卡中增加"⚠️ 主胜过热"警告，建议轻注或观望。\n';
-    signalInstruction += '4. 快照信号不改变主推判断（仍按胜率优先规则），但必须作为风险因素在报告中体现。\n';
   }
 
   return `你是足球盘口价值分析引擎,服务理性投注者。今天:${today}。
@@ -687,12 +683,12 @@ function buildPrompt(params){
 比赛情境:${CTX_LABEL[context] || context}
 ${oddsText ? "【PROLINE+盘口实价（OCR识别）】\n" + oddsText : "【未提供盘口实价，markets中odds填null】"}
 ${snapContext}
-${signalInstruction}
 
 【🔎 搜索结果（Tavily 实时检索）】
 ${searchContext}
 
 因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态 ⑤盘口变动
+⚠️ 快照信号的量化调整建议已在上方标注，请将其纳入概率计算。
 
 ${cornerDBText}
 
@@ -1022,7 +1018,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果（含快照联动展示）
+// 渲染结果（含Edge强制同步）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1150,7 +1146,7 @@ function renderResults(snapData){
     h += '</div>';
   }
 
-  // ── 三区块结论 ──
+  // ── 三区块结论（含Edge强制同步） ──
   var rec = r.rec;
   if(rec){
     var main = rec.main || {};
@@ -1159,11 +1155,14 @@ function renderResults(snapData){
     var signalAlert = rec.signal_alert || null;
     var isWatch = rec.conf === '观望' || !main.dir;
 
-    // 从 markets 同步 Edge（强制一致性）
+    // ================================================================
+    // 【强制 Edge 同步】从 markets 数组中覆盖 rec 中的 Edge 值
+    // ================================================================
     if (main.dir && markets.length > 0) {
       var mainMarket = null;
       for (var mi = 0; mi < markets.length; mi++) {
         var mk = markets[mi];
+        // 匹配方向名或盘口名包含方向
         if (mk.s === main.dir || mk.m.indexOf(main.dir) >= 0 || main.dir.indexOf(mk.s) >= 0) {
           mainMarket = mk;
           break;
@@ -1173,6 +1172,7 @@ function renderResults(snapData){
         main.edge = mainMarket.edge;
       }
     }
+
     for (var vi = 0; vi < value.length; vi++) {
       var valItem = value[vi];
       if (valItem.market && markets.length > 0) {
