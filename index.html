@@ -200,6 +200,7 @@ var TEAM_NAME_MAP = {
   "布兰": "Brann",
   "KF Ballkani": "KF Ballkani",
   "波希米亚人": "Bohemians Dublin",
+  "克卢日大学": "Universitatea Cluj",
   "皇家马德里": "Real Madrid",
   "巴塞罗那": "Barcelona",
   "马德里竞技": "Atletico Madrid",
@@ -391,7 +392,6 @@ function lookupCorners(league, home, away) {
   var allLeagueKeys = Object.keys(CORNER_DB);
   var foundHome = null;
   var foundAway = null;
-  var foundLeague = null;
 
   for (var li = 0; li < allLeagueKeys.length; li++) {
     var lk = allLeagueKeys[li];
@@ -407,12 +407,13 @@ function lookupCorners(league, home, away) {
     if (a2 && !foundAway) foundAway = a2;
   }
 
-  // 如果只找到其中一支球队，也返回
-  if (foundHome || foundAway) {
-    var total = 0;
-    if (foundHome) total += foundHome.avg;
-    if (foundAway) total += foundAway.avg;
-    return { home: foundHome, away: foundAway, total: total };
+  // 如果只找到其中一支球队，也返回（但只返回找到的那支）
+  if (foundHome && foundAway) {
+    return { home: foundHome, away: foundAway, total: foundHome.avg + foundAway.avg };
+  } else if (foundHome && !foundAway) {
+    return { home: foundHome, away: null, total: foundHome.avg };
+  } else if (!foundHome && foundAway) {
+    return { home: null, away: foundAway, total: foundAway.avg };
   }
 
   // 都找不到
@@ -1124,7 +1125,7 @@ function validateAndFixScore(r) {
     r._max_prob_value = maxProb;
   }
 
-  // 4. ★★★ 角球预期修复（增强版）★★★
+  // 4. ★★★ 角球预期修复（增强版 - 确保主客队数据正确相加）★★★
   var league = ST.league;
   var home = getField('home');
   var away = getField('away');
@@ -1132,9 +1133,21 @@ function validateAndFixScore(r) {
   
   // 从数据库获取角球数据（已包含跨联赛回退）
   var cornerLookup = lookupCorners(league, home, away);
-  var dbTotal = cornerLookup && cornerLookup.total !== null ? cornerLookup.total : null;
   var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
   var dbAway = cornerLookup && cornerLookup.away ? cornerLookup.away.avg : null;
+  
+  // ★★★ 关键修复：只有当主客队都有数据库值时，才计算总和 ★★★
+  // 如果只有主队有数据，只使用主队数据；如果只有客队有数据，只使用客队数据
+  var dbTotal = null;
+  if (cornerLookup) {
+    if (cornerLookup.home && cornerLookup.away) {
+      dbTotal = cornerLookup.home.avg + cornerLookup.away.avg;
+    } else if (cornerLookup.home && !cornerLookup.away) {
+      dbTotal = cornerLookup.home.avg;
+    } else if (!cornerLookup.home && cornerLookup.away) {
+      dbTotal = cornerLookup.away.avg;
+    }
+  }
   
   // 4a. 如果 exp_home 和 exp_away 都有值，但 exp_total 不等于两者之和，则修正
   if (r.corners.exp_home !== null && r.corners.exp_home !== undefined &&
