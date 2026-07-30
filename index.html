@@ -6,7 +6,6 @@
 <title>盘口价值分析终端 · 动机扭曲版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-/* 完整样式（与之前一致，为节省篇幅此处省略，实际使用时请保留原有完整样式） */
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0B1220;color:#E6EDF7;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
 input,textarea,select,button{font-family:inherit;font-size:14px}
@@ -47,7 +46,6 @@ select option{background:#121B2E}
 </head>
 <body>
 
-<!-- 顶部和设置面板与之前一致，此处省略，实际使用时保留完整 -->
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
   <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 动机扭曲版</div>
@@ -197,6 +195,8 @@ var TEAM_NAME_MAP = {
   "奥胡斯": "AGF Aarhus",
   "安德莱赫特": "Anderlecht",
   "哈马比": "Hammarby IF",
+  "中日德兰": "FC Midtjylland",
+  "贝西克塔斯": "Beşiktaş JK",
   "皇家马德里": "Real Madrid",
   "巴塞罗那": "Barcelona",
   "马德里竞技": "Atletico Madrid",
@@ -744,7 +744,7 @@ async function smartSearch(query, unsearchKey, tavilyKey) {
 }
 
 // =====================================================================
-// Prompt 构建
+// Prompt 构建（含数学一致性约束）
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -881,8 +881,18 @@ ${cornerDBText}
 区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00，或快照信号触发（客胜被推高且客胜概率≥10%）。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
 
-【⚠️ 比分一致性要求】
-predicted_score 的胜平负结果必须与 probs 中最高概率的方向一致。如果主胜概率最高，比分必须为主胜（如2-1、1-0）；如果平局概率最高，比分必须为平局（如1-1、0-0）；如果客胜概率最高，比分必须为客胜（如1-2、0-1）。
+【⚠️ 数学一致性要求（强制执行）】
+1. predicted_score 的胜平负结果必须与 probs 中最高概率方向完全一致。
+   - 如果最高概率是 home → 比分必须是主胜（如 2-1, 1-0）
+   - 如果最高概率是 draw → 比分必须是平局（如 1-1, 0-0）
+   - 如果最高概率是 away → 比分必须是客胜（如 1-2, 0-1）
+
+2. goals.exp_total 与 goals.over25 必须保持统计一致性：
+   - exp_total 1.8-2.1 → over25 应为 35%-42%
+   - exp_total 2.2-2.5 → over25 应为 43%-52%
+   - exp_total 2.6-2.9 → over25 应为 53%-62%
+   - exp_total 3.0+ → over25 应为 63%+
+   两者必须匹配，不得出现 exp_total=2.0 但 over25=52% 这类矛盾。
 
 只输出JSON。格式:
 {
@@ -989,41 +999,24 @@ async function runAnalysis(params, dsKey) {
 }
 
 // =====================================================================
-// 比分一致性校验 + 自动修正
+// 比分与数据一致性校验（增强版）
 // =====================================================================
-function validateAndFixScore(r) {
-  if (!r || !r.predicted_score || !r.probs) return r;
-
-  // 解析比分
-  var scoreParts = r.predicted_score.split('-').map(function(s){ return parseInt(s.trim()); });
-  if (scoreParts.length !== 2 || isNaN(scoreParts[0]) || isNaN(scoreParts[1])) {
-    // 无法解析，根据最高概率方向生成默认比分
-    var maxDir = getMaxProbDirection(r.probs);
-    r.predicted_score = getDefaultScore(maxDir);
-    r._score_fixed = true;
-    return r;
-  }
-
-  var homeGoals = scoreParts[0];
-  var awayGoals = scoreParts[1];
-  var scoreDir = homeGoals > awayGoals ? 'home' : (homeGoals < awayGoals ? 'away' : 'draw');
-
-  // 获取最高概率方向
-  var maxDir = getMaxProbDirection(r.probs);
-
-  // 如果一致，直接返回
-  if (scoreDir === maxDir) return r;
-
-  // 不一致：自动修正比分
-  console.log('[校验] 比分 ' + r.predicted_score + ' 与方向 ' + maxDir + ' 不一致，自动修正');
-  r.predicted_score = getDefaultScore(maxDir);
-  r._score_fixed = true;
-  return r;
+function getScoreDirection(score) {
+  if (!score) return null;
+  var parts = score.split('-');
+  if (parts.length !== 2) return null;
+  var h = parseInt(parts[0].trim());
+  var a = parseInt(parts[1].trim());
+  if (isNaN(h) || isNaN(a)) return null;
+  if (h > a) return 'home';
+  if (h < a) return 'away';
+  return 'draw';
 }
 
 function getMaxProbDirection(probs) {
   if (!probs) return 'draw';
   var maxP = Math.max(probs.home || 0, probs.draw || 0, probs.away || 0);
+  if (maxP === 0) return 'draw';
   if (maxP === (probs.home || 0)) return 'home';
   if (maxP === (probs.away || 0)) return 'away';
   return 'draw';
@@ -1038,6 +1031,65 @@ function getDefaultScore(dir) {
   return map[dir] || '1-1';
 }
 
+function getOver25Range(expTotal) {
+  if (expTotal < 1.8) return { min: 0.28, max: 0.35 };
+  if (expTotal < 2.1) return { min: 0.35, max: 0.42 };
+  if (expTotal < 2.4) return { min: 0.42, max: 0.50 };
+  if (expTotal < 2.7) return { min: 0.50, max: 0.58 };
+  if (expTotal < 3.0) return { min: 0.58, max: 0.65 };
+  return { min: 0.65, max: 0.75 };
+}
+
+function validateAndFixScore(r) {
+  if (!r) return r;
+
+  var fixed = false;
+  var fixMessages = [];
+
+  // ---- 1. 校验比分与方向一致性 ----
+  var scoreDir = getScoreDirection(r.predicted_score);
+  var maxDir = getMaxProbDirection(r.probs);
+  
+  if (scoreDir && maxDir && scoreDir !== maxDir) {
+    console.log('[校验] 比分 ' + r.predicted_score + ' 与方向 ' + maxDir + ' 不一致，自动修正');
+    r.predicted_score = getDefaultScore(maxDir);
+    fixed = true;
+    fixMessages.push('比分已从 ' + scoreDir + ' 修正为 ' + maxDir);
+  }
+
+  // ---- 2. 校验预期总进球与大2.5概率一致性 ----
+  var expTotal = r.goals && r.goals.exp_total != null ? r.goals.exp_total : null;
+  var over25 = r.goals && r.goals.over25 != null ? r.goals.over25 : null;
+  
+  if (expTotal !== null && over25 !== null && expTotal > 0) {
+    var expectedRange = getOver25Range(expTotal);
+    // 如果 over25 与预期范围偏差超过 ±8%，则修正
+    if (over25 < expectedRange.min - 0.08 || over25 > expectedRange.max + 0.08) {
+      var correctedOver25 = Math.round((expectedRange.min + expectedRange.max) / 2 * 100) / 100;
+      console.log('[校验] over25 ' + (over25 * 100).toFixed(1) + '% 与 exp_total=' + expTotal + ' 不一致，修正为 ' + (correctedOver25 * 100).toFixed(1) + '%');
+      r.goals.over25 = correctedOver25;
+      fixed = true;
+      fixMessages.push('大2.5概率已从 ' + (over25 * 100).toFixed(0) + '% 修正为 ' + (correctedOver25 * 100).toFixed(0) + '%（与预期总进球 ' + expTotal.toFixed(1) + ' 保持一致）');
+    }
+  }
+
+  // ---- 3. 如果概率不足55%，添加标记供前端展示 ----
+  var maxProb = Math.max(r.probs.home || 0, r.probs.draw || 0, r.probs.away || 0);
+  if (maxProb < 0.55 && maxProb > 0) {
+    r._prob_insufficient = true;
+    r._max_prob_dir = getMaxProbDirection(r.probs);
+    r._max_prob_value = maxProb;
+    // 如果比分被修正了，不再额外添加标记，避免信息过载
+  }
+
+  if (fixed) {
+    r._fixed = true;
+    r._fix_messages = fixMessages;
+  }
+
+  return r;
+}
+
 // =====================================================================
 // 多级推荐判断
 // =====================================================================
@@ -1047,27 +1099,23 @@ function getRecommendationLevel(main, threshold) {
   var edge = main.edge;
   var prob = main.prob;
 
-  // 主推条件：Edge >= 阈值 且 概率 >= 55%
   if (edge !== null && edge >= threshold && prob !== null && prob >= 0.55) {
     return { level: 'strong', label: '✅ 主推', color: '#34D399' };
   }
 
-  // 轻注关注：Edge > 0 且 < 阈值，但概率 >= 50%
   if (edge !== null && edge > 0 && edge < threshold && prob !== null && prob >= 0.50) {
     return { level: 'light', label: '⚡ 轻注关注', color: '#FB923C' };
   }
 
-  // 倾向提示：Edge > 0 且 概率 >= 45%
   if (edge !== null && edge > 0 && prob !== null && prob >= 0.45) {
     return { level: 'hint', label: '📌 倾向提示', color: '#6FA8F5' };
   }
 
-  // 观望
   return { level: 'none', label: '⏸️ 观望', color: '#54678C' };
 }
 
 // =====================================================================
-// 分析主流程（含缓存 + 角球数据库跳过 + 双引擎）
+// 分析主流程
 // =====================================================================
 async function analyze(){
   var dsKey = document.getElementById('ds-key-inp').value.trim();
@@ -1123,7 +1171,7 @@ async function analyze(){
     }
     var finalOddsText = ST.oddsMode === 'txt' ? getField('odds') : ocrCombinedText;
 
-    // ── 缓存 key ──
+    // 缓存
     var cacheKey = 'search_cache_' + ST.league + '_' + home.toLowerCase() + '_' + away.toLowerCase();
     var cached = dbGet(cacheKey);
     var searchContext = '';
@@ -1250,7 +1298,7 @@ async function analyze(){
     statusEl.textContent = '🧠 分析中（DeepSeek Pro）…约30-90秒';
     var r = await runAnalysis(params, dsKey);
     
-    // ---- 后处理：比分一致性校验 ----
+    // ---- ★ 核心改动：后处理校验 ---- ★
     r = validateAndFixScore(r);
     
     ST.result = r;
@@ -1326,7 +1374,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果（含多级推荐展示）
+// 渲染结果（含修正提示 + 概率不足展示）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1339,7 +1387,7 @@ function renderResults(snapData){
   });
   var h = '';
 
-  // 关键数据（同原有）
+  // 关键数据
   var kd = r.key_data || {};
   if(kd.home_corner_home || kd.away_corner_away){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:8px">📊 关键数据</div>';
@@ -1354,7 +1402,7 @@ function renderResults(snapData){
     h += '</div></div>';
   }
 
-  // 快照对比（同原有）
+  // 快照对比
   if(snapData){
     var snap = snapData;
     var current = r.odds_snapshot || {};
@@ -1383,19 +1431,37 @@ function renderResults(snapData){
     }
   }
 
-  // 预测结果（含比分修正提示）
+  // 预测结果（含一致性修正提示 + 概率不足展示）
   var pr = r.probs || {};
   var g = r.goals || {};
   var cn = r.corners || {};
-  var predLabel = { home: '主胜', draw: '平局', away: '客胜' }[pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw')] || '—';
+  
+  // ---- ★ 核心改动：确定预测标签 ---- ★
+  var predDisplayLabel = '';
+  var maxProb = Math.max(pr.home || 0, pr.draw || 0, pr.away || 0);
+  
+  if (r._prob_insufficient) {
+    // 概率不足55%，显示"概率不足"
+    var dirMap = { home: '主胜', draw: '平局', away: '客胜' };
+    var dirLabel = dirMap[r._max_prob_dir] || '未知';
+    predDisplayLabel = '概率不足（最高 ' + dirLabel + ' ' + pct(r._max_prob_value) + '）';
+  } else {
+    // 正常显示
+    var dirMap2 = { home: '主胜', draw: '平局', away: '客胜' };
+    var maxDir = getMaxProbDirection(pr);
+    predDisplayLabel = dirMap2[maxDir] || '—';
+  }
   
   h += '<div class="card" style="border-color:#F5B84188;background:#F5B84108">';
   h += '<div style="font-size:12px;color:#F5B841;font-weight:700;letter-spacing:.1em;margin-bottom:8px">🔮 预测结果（自动记入验证）</div>';
-  if (r._score_fixed) {
-    h += '<div style="font-size:11px;color:#FB923C;margin-bottom:6px">⚠️ 比分已自动修正为与预测方向一致</div>';
+  
+  // 显示修正提示
+  if (r._fixed && r._fix_messages && r._fix_messages.length > 0) {
+    h += '<div style="font-size:11px;color:#FB923C;margin-bottom:6px">⚠️ ' + r._fix_messages.join('；') + '</div>';
   }
+  
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">';
-  h += '<div><span style="color:#54678C">胜平负</span><br><b style="color:#E6EDF7">'+predLabel+'</b></div>';
+  h += '<div><span style="color:#54678C">胜平负</span><br><b style="color:' + (r._prob_insufficient ? '#FB923C' : '#E6EDF7') + '">' + predDisplayLabel + '</b></div>';
   h += '<div><span style="color:#54678C">比分</span><br><b style="color:#F5B841">'+(r.predicted_score || '—')+'</b></div>';
   h += '<div><span style="color:#54678C">角球</span><br><b style="color:#C084FC">'+(cn.exp_total != null ? cn.exp_total.toFixed(1)+'角' : '—')+'</b></div>';
   h += '</div>';
@@ -1407,7 +1473,7 @@ function renderResults(snapData){
   h += '<div style="font-size:10.5px;color:#54678C;margin-top:8px">✅ 已自动记入验证系统</div>';
   h += '</div>';
 
-  // 动机闸门（同原有）
+  // 动机闸门
   var gmap = {proceed:['动机清晰','#34D399'], caution:['单边存疑','#F5B841'], skip:['动机浑浊·观望','#F87171']};
   var gv = gmap[r.gate] || ['未知','#8CA0C0'];
   h += '<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em">动机闸门</span><span style="padding:4px 12px;border-radius:999px;border:1px solid '+gv[1]+';color:'+gv[1]+';font-size:12.5px;font-weight:700;background:'+gv[1]+'14">'+gv[0]+'</span></div>';
@@ -1457,7 +1523,7 @@ function renderResults(snapData){
     h += '</div>';
   }
 
-  // ── 三区块结论（含多级推荐） ──
+  // ── 三区块结论 ──
   var rec = r.rec;
   if(rec){
     var main = rec.main || {};
@@ -1496,16 +1562,13 @@ function renderResults(snapData){
       }
     }
 
-    // 获取主推方向的阈值和推荐级别
     var mainThreshold = main.dir ? getEdgeThreshold(main.dir) : 0.04;
     var recLevel = getRecommendationLevel(main, mainThreshold);
 
     h += '<div class="slip"><div class="slip-bar"></div>';
     h += '<div style="font-size:10px;letter-spacing:.25em;color:#54678C;margin-bottom:10px">📋 结论 · 胜率优先模式</div>';
 
-    // ---- 推荐卡片（根据级别显示不同样式） ----
     if (recLevel.level === 'strong') {
-      // 主推
       var mainEdge = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #34D39955;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#34D399;font-weight:700;letter-spacing:.08em">✅ 主推（Edge达标）</div>';
@@ -1518,7 +1581,6 @@ function renderResults(snapData){
       if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
       h += '</div>';
     } else if (recLevel.level === 'light') {
-      // 轻注关注
       var mainEdge2 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #FB923C55;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#FB923C;font-weight:700;letter-spacing:.08em">⚡ 轻注关注（Edge未达阈值，建议小额试探）</div>';
@@ -1531,7 +1593,6 @@ function renderResults(snapData){
       if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
       h += '</div>';
     } else if (recLevel.level === 'hint') {
-      // 倾向提示
       var mainEdge3 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #6FA8F544;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em">📌 倾向提示（正Edge但未达阈值，仅供参考）</div>';
@@ -1544,7 +1605,6 @@ function renderResults(snapData){
       if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
       h += '</div>';
     } else {
-      // 完全观望
       h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #54678C55;margin-bottom:10px">';
       h += '<div style="color:#54678C;font-weight:700;font-size:16px">⏸️ 观望</div>';
       if (main && main.dir) {
@@ -1555,7 +1615,6 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 爆冷预警（同原有）
     if(upset && upset.dir){
       h += '<div style="padding:10px 12px;background:#EF444414;border:1px solid #EF444455;border-radius:8px;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#EF4444;font-weight:700;letter-spacing:.08em">⚠️ 爆冷预警</div>';
@@ -1572,7 +1631,6 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 价值补充（同原有）
     if(value && value.length > 0){
       h += '<div style="padding:10px 12px;background:#6FA8F514;border:1px solid #6FA8F544;border-radius:8px">';
       h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em;margin-bottom:6px">📌 价值补充（可选）</div>';
@@ -1593,7 +1651,6 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    // 只有主推或轻注时才显示“记入投注日志”按钮
     if (recLevel.level === 'strong' || recLevel.level === 'light') {
       h += '<button class="btn-s gold" id="rec-btn" style="margin-top:12px;font-weight:700">+ 记入投注日志</button>';
     }
@@ -1611,7 +1668,7 @@ function renderResults(snapData){
   var rb = document.getElementById('rec-btn'); if(rb) rb.addEventListener('click', recordBet);
 }
 
-// ── 投注日志 ──
+// 投注日志
 function recordBet(){
   var r = ST.result; if(!r || !r.rec) return;
   var home = getField('home'), away = getField('away');
@@ -1633,7 +1690,7 @@ function recordBet(){
   ST.log.unshift(entry); saveLog(ST.log); switchTab('log'); refreshLog();
 }
 
-// ── 验证系统 ──
+// 验证系统
 function saveActual(id, score, corners){
   var actual_1x2 = null;
   var parts = (score || '').split('-');
