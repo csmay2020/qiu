@@ -268,7 +268,7 @@ function normalizeTeamName(name) {
 }
 
 // =====================================================================
-// 角球数据库（不变）
+// ★★★ 角球数据库（含跨联赛回退查找功能）★★★
 // =====================================================================
 var CORNER_DB = {
   "MLS":{
@@ -355,29 +355,68 @@ var CORNER_DB = {
   }
 };
 
-function lookupCorners(league, home, away){
+// ★★★ 核心改动：跨联赛回退查找 ★★★
+function lookupCorners(league, home, away) {
   var db = CORNER_DB[league];
-  if(!db) return null;
   var homeNorm = normalizeTeamName(home);
   var awayNorm = normalizeTeamName(away);
-  function findTeam(name){
-    if(!name) return null;
+
+  function findTeamInDb(db, name) {
+    if (!name || !db) return null;
     var n = name.trim();
-    if(db[n] !== undefined) return {team:n, avg:db[n]};
+    if (db[n] !== undefined) return { team: n, avg: db[n] };
     var lower = n.toLowerCase();
     var keys = Object.keys(db);
-    for(var i=0;i<keys.length;i++){
-      if(keys[i].toLowerCase() === lower) return {team:keys[i], avg:db[keys[i]]};
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === lower) return { team: keys[i], avg: db[keys[i]] };
     }
-    for(var j=0;j<keys.length;j++){
-      if(keys[j].toLowerCase().indexOf(lower) >= 0 || lower.indexOf(keys[j].toLowerCase()) >= 0)
-        return {team:keys[j], avg:db[keys[j]]};
+    for (var j = 0; j < keys.length; j++) {
+      if (keys[j].toLowerCase().indexOf(lower) >= 0 || lower.indexOf(keys[j].toLowerCase()) >= 0) {
+        return { team: keys[j], avg: db[keys[j]] };
+      }
     }
     return null;
   }
-  var h = findTeam(homeNorm), a = findTeam(awayNorm);
-  if(!h && !a) return null;
-  return {home:h, away:a, total:(h?h.avg:0)+(a?a.avg:0)};
+
+  // 第一步：在当前联赛中查找
+  if (db) {
+    var h = findTeamInDb(db, homeNorm);
+    var a = findTeamInDb(db, awayNorm);
+    if (h && a) return { home: h, away: a, total: h.avg + a.avg };
+    if (h && !a) return { home: h, away: null, total: h.avg };
+    if (!h && a) return { home: null, away: a, total: a.avg };
+  }
+
+  // 第二步：跨联赛回退——在所有已知联赛中查找
+  var allLeagueKeys = Object.keys(CORNER_DB);
+  var foundHome = null;
+  var foundAway = null;
+  var foundLeague = null;
+
+  for (var li = 0; li < allLeagueKeys.length; li++) {
+    var lk = allLeagueKeys[li];
+    var dbL = CORNER_DB[lk];
+    var h2 = findTeamInDb(dbL, homeNorm);
+    var a2 = findTeamInDb(dbL, awayNorm);
+    // 如果两个都在这个联赛中，直接返回
+    if (h2 && a2) {
+      return { home: h2, away: a2, total: h2.avg + a2.avg };
+    }
+    // 否则记录找到的球队
+    if (h2 && !foundHome) foundHome = h2;
+    if (a2 && !foundAway) foundAway = a2;
+  }
+
+  // 如果只找到其中一支球队，也返回
+  if (foundHome || foundAway) {
+    var total = 0;
+    if (foundHome) total += foundHome.avg;
+    if (foundAway) total += foundAway.avg;
+    return { home: foundHome, away: foundAway, total: total };
+  }
+
+  // 都找不到
+  return null;
 }
 
 var LEAGUES = ["英超","西甲","意甲","德甲","法甲","欧冠","欧联杯","欧会杯","世界杯","MLS","墨甲","巴西甲","巴西乙","阿根廷甲","阿根廷杯","秘鲁甲","挪超","瑞典甲","瑞典乙","芬超","冰岛超","瑞超","其他"];
@@ -1091,7 +1130,7 @@ function validateAndFixScore(r) {
   var away = getField('away');
   if (!r.corners) r.corners = {};
   
-  // 从数据库获取角球数据
+  // 从数据库获取角球数据（已包含跨联赛回退）
   var cornerLookup = lookupCorners(league, home, away);
   var dbTotal = cornerLookup && cornerLookup.total !== null ? cornerLookup.total : null;
   var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
