@@ -6,7 +6,7 @@
 <title>盘口价值分析终端 · 动机扭曲版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-/* 样式不变，略... 为节省篇幅，此处省略样式，实际使用时请保留原有样式 */
+/* 完整样式（与之前一致，为节省篇幅此处省略，实际使用时请保留原有完整样式） */
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0B1220;color:#E6EDF7;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
 input,textarea,select,button{font-family:inherit;font-size:14px}
@@ -47,6 +47,7 @@ select option{background:#121B2E}
 </head>
 <body>
 
+<!-- 顶部和设置面板与之前一致，此处省略，实际使用时保留完整 -->
 <div style="background:linear-gradient(165deg,#0D1730,#15234A 55%,#0D1730);border-bottom:1px solid #1E2A44;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
   <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 动机扭曲版</div>
@@ -187,15 +188,15 @@ select option{background:#121B2E}
 'use strict';
 
 // =====================================================================
-// 中文→英文 队名映射（用户可以自行添加）
+// 中文→英文 队名映射
 // =====================================================================
 var TEAM_NAME_MAP = {
-  // 欧冠/欧战常见球队
   "塞萨洛尼基": "PAOK",
   "基辅迪纳摩": "Dynamo Kyiv",
   "波兹南": "Lech Poznań",
   "奥胡斯": "AGF Aarhus",
-  // 五大联赛常用中文名（示例）
+  "安德莱赫特": "Anderlecht",
+  "哈马比": "Hammarby IF",
   "皇家马德里": "Real Madrid",
   "巴塞罗那": "Barcelona",
   "马德里竞技": "Atletico Madrid",
@@ -220,13 +221,11 @@ var TEAM_NAME_MAP = {
   "那不勒斯": "Napoli",
   "罗马": "Roma",
   "亚特兰大": "Atalanta",
-  // 挪超
   "博德闪耀": "Bodø/Glimt",
   "莫尔德": "Molde",
   "罗森博格": "Rosenborg",
   "布兰": "Brann",
   "维京": "Viking",
-  // MLS
   "迈阿密国际": "Inter Miami",
   "洛杉矶FC": "Los Angeles FC",
   "洛杉矶银河": "LA Galaxy",
@@ -257,16 +256,12 @@ var TEAM_NAME_MAP = {
   "奥斯汀": "Austin",
   "圣迭戈": "San Diego",
   "CF蒙特利尔": "CF Montreal"
-  // 你可以继续添加更多
 };
 
-// 辅助函数：尝试将中文名转换为英文名
 function normalizeTeamName(name) {
   if (!name) return name;
   var trimmed = name.trim();
-  // 如果映射表中有，直接返回英文名
   if (TEAM_NAME_MAP[trimmed]) return TEAM_NAME_MAP[trimmed];
-  // 否则返回原样（可能是英文或未收录的中文）
   return trimmed;
 }
 
@@ -361,7 +356,6 @@ var CORNER_DB = {
 function lookupCorners(league, home, away){
   var db = CORNER_DB[league];
   if(!db) return null;
-  // 将中文名转为英文
   var homeNorm = normalizeTeamName(home);
   var awayNorm = normalizeTeamName(away);
   function findTeam(name){
@@ -575,7 +569,6 @@ function edgeColor(e, type){
 // 三引擎 OCR
 // =====================================================================
 
-// 1. iOS OCR Server
 async function ocrIOS(base64Image, serverUrl) {
   try {
     console.log('[iOS OCR] 请求开始...');
@@ -604,7 +597,6 @@ async function ocrIOS(base64Image, serverUrl) {
   }
 }
 
-// 2. Tesseract.js
 async function ocrTesseract(base64Image) {
   try {
     console.log('[Tesseract] 开始识别...');
@@ -617,7 +609,6 @@ async function ocrTesseract(base64Image) {
   }
 }
 
-// 3. OCR.space
 async function ocrSpace(base64Image, apiKey) {
   if (!apiKey) {
     console.warn('[OCR.space] 缺少 API Key');
@@ -658,7 +649,6 @@ async function ocrSpace(base64Image, apiKey) {
   }
 }
 
-// 主 OCR 路由
 async function recognizeImageWithOCR(base64Image) {
   var engine = ST.ocrEngine;
   console.log('[OCR] 使用引擎:', engine);
@@ -675,13 +665,10 @@ async function recognizeImageWithOCR(base64Image) {
 }
 
 // =====================================================================
-// UnSearch 搜索
+// UnSearch + Tavily 搜索
 // =====================================================================
 async function unsearchSearch(query, apiKey) {
-  if (!apiKey) {
-    console.warn('[UnSearch] 缺少 API Key');
-    return null;
-  }
+  if (!apiKey) return null;
   try {
     console.log('[UnSearch] 搜索:', query);
     var resp = await fetch('https://api.unsearch.dev/search', {
@@ -709,9 +696,6 @@ async function unsearchSearch(query, apiKey) {
   }
 }
 
-// =====================================================================
-// Tavily 搜索（保留作为备用）
-// =====================================================================
 async function tavilySearch(query, apiKey) {
   if (!apiKey) {
     console.warn('[Tavily] 缺少 API Key');
@@ -744,11 +728,7 @@ async function tavilySearch(query, apiKey) {
   }
 }
 
-// =====================================================================
-// 统一搜索接口：优先 UnSearch，失败降级 Tavily
-// =====================================================================
 async function smartSearch(query, unsearchKey, tavilyKey) {
-  // 尝试 UnSearch
   if (unsearchKey) {
     var result = await unsearchSearch(query, unsearchKey);
     if (result && (result.results.length > 0 || result.answer)) {
@@ -756,17 +736,15 @@ async function smartSearch(query, unsearchKey, tavilyKey) {
     }
     console.warn('[SmartSearch] UnSearch 无结果或失败，降级到 Tavily');
   }
-  // 降级到 Tavily
   if (tavilyKey) {
     var tavResult = await tavilySearch(query, tavilyKey);
     return { ...tavResult, engine: 'Tavily' };
   }
-  // 两者都不可用
   throw new Error('没有可用的搜索引擎，请在设置中填写 UnSearch 或 Tavily API Key');
 }
 
 // =====================================================================
-// Prompt 构建（含动机扭曲案例库）
+// Prompt 构建
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -787,7 +765,6 @@ function buildPrompt(params){
     cornerDBText = lines.join('\n');
   }
 
-  // 快照对比上下文（含量化信号）
   var snapContext = '';
   var snapshotSignal = null;
   var signalQuantified = null;
@@ -825,7 +802,6 @@ function buildPrompt(params){
     snapContext += '\n';
   }
 
-  // ── 动机扭曲案例库 ──
   var motivationCaseLib = `
 【📚 动机扭曲案例库（基于真实比赛复盘，强制执行）】
 
@@ -904,6 +880,9 @@ ${cornerDBText}
 区块1 - 主推：从 probs 中选出概率最高的方向，概率≥55%且Edge达标。
 区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00，或快照信号触发（客胜被推高且客胜概率≥10%）。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
+
+【⚠️ 比分一致性要求】
+predicted_score 的胜平负结果必须与 probs 中最高概率的方向一致。如果主胜概率最高，比分必须为主胜（如2-1、1-0）；如果平局概率最高，比分必须为平局（如1-1、0-0）；如果客胜概率最高，比分必须为客胜（如1-2、0-1）。
 
 只输出JSON。格式:
 {
@@ -1010,6 +989,84 @@ async function runAnalysis(params, dsKey) {
 }
 
 // =====================================================================
+// 比分一致性校验 + 自动修正
+// =====================================================================
+function validateAndFixScore(r) {
+  if (!r || !r.predicted_score || !r.probs) return r;
+
+  // 解析比分
+  var scoreParts = r.predicted_score.split('-').map(function(s){ return parseInt(s.trim()); });
+  if (scoreParts.length !== 2 || isNaN(scoreParts[0]) || isNaN(scoreParts[1])) {
+    // 无法解析，根据最高概率方向生成默认比分
+    var maxDir = getMaxProbDirection(r.probs);
+    r.predicted_score = getDefaultScore(maxDir);
+    r._score_fixed = true;
+    return r;
+  }
+
+  var homeGoals = scoreParts[0];
+  var awayGoals = scoreParts[1];
+  var scoreDir = homeGoals > awayGoals ? 'home' : (homeGoals < awayGoals ? 'away' : 'draw');
+
+  // 获取最高概率方向
+  var maxDir = getMaxProbDirection(r.probs);
+
+  // 如果一致，直接返回
+  if (scoreDir === maxDir) return r;
+
+  // 不一致：自动修正比分
+  console.log('[校验] 比分 ' + r.predicted_score + ' 与方向 ' + maxDir + ' 不一致，自动修正');
+  r.predicted_score = getDefaultScore(maxDir);
+  r._score_fixed = true;
+  return r;
+}
+
+function getMaxProbDirection(probs) {
+  if (!probs) return 'draw';
+  var maxP = Math.max(probs.home || 0, probs.draw || 0, probs.away || 0);
+  if (maxP === (probs.home || 0)) return 'home';
+  if (maxP === (probs.away || 0)) return 'away';
+  return 'draw';
+}
+
+function getDefaultScore(dir) {
+  var map = {
+    'home': '2-1',
+    'draw': '1-1',
+    'away': '1-2'
+  };
+  return map[dir] || '1-1';
+}
+
+// =====================================================================
+// 多级推荐判断
+// =====================================================================
+function getRecommendationLevel(main, threshold) {
+  if (!main || !main.dir) return { level: 'none', label: '无推荐', color: '#54678C' };
+
+  var edge = main.edge;
+  var prob = main.prob;
+
+  // 主推条件：Edge >= 阈值 且 概率 >= 55%
+  if (edge !== null && edge >= threshold && prob !== null && prob >= 0.55) {
+    return { level: 'strong', label: '✅ 主推', color: '#34D399' };
+  }
+
+  // 轻注关注：Edge > 0 且 < 阈值，但概率 >= 50%
+  if (edge !== null && edge > 0 && edge < threshold && prob !== null && prob >= 0.50) {
+    return { level: 'light', label: '⚡ 轻注关注', color: '#FB923C' };
+  }
+
+  // 倾向提示：Edge > 0 且 概率 >= 45%
+  if (edge !== null && edge > 0 && prob !== null && prob >= 0.45) {
+    return { level: 'hint', label: '📌 倾向提示', color: '#6FA8F5' };
+  }
+
+  // 观望
+  return { level: 'none', label: '⏸️ 观望', color: '#54678C' };
+}
+
+// =====================================================================
 // 分析主流程（含缓存 + 角球数据库跳过 + 双引擎）
 // =====================================================================
 async function analyze(){
@@ -1074,7 +1131,6 @@ async function analyze(){
     var totalCredits = 0;
     var usedEngine = 'Unknown';
 
-    // 检查缓存是否有效（24小时内）
     if (cached && cached.ts && (Date.now() - cached.ts < 86400000)) {
       searchContext = cached.searchContext || '';
       cornerDataFound = cached.cornerDataFound || false;
@@ -1082,14 +1138,11 @@ async function analyze(){
       statusEl.textContent = '📦 使用缓存数据（24小时内有效）';
       console.log('[缓存] 命中，跳过搜索');
     } else {
-      // ── 缓存未命中，执行搜索 ──
       statusEl.textContent = '🔎 搜索比赛信息（UnSearch 优先）…';
 
-      // 检查角球数据库
       var cornerLookup = lookupCorners(ST.league, home, away);
       var hasCornerDB = !!(cornerLookup && cornerLookup.home && cornerLookup.away);
 
-      // 基础查询（始终需要）
       var baseQueries = [
         home + ' vs ' + away + ' head to head',
         home + ' injuries team news',
@@ -1098,7 +1151,6 @@ async function analyze(){
         away + ' recent form'
       ];
 
-      // 角球/进球相关查询（如果数据库没有，才搜索）
       var extraQueries = [];
       if (!hasCornerDB) {
         extraQueries = [
@@ -1128,7 +1180,6 @@ async function analyze(){
       }
       if (hasCornerDB) cornerDataFound = true;
 
-      // 组装 searchContext
       for (var key in searchResults) {
         var data = searchResults[key];
         if (data.answer) {
@@ -1147,7 +1198,6 @@ async function analyze(){
         searchContext = '搜索无结果，请手动补充关键信息。';
       }
 
-      // 保存缓存
       dbSet(cacheKey, {
         ts: Date.now(),
         searchContext: searchContext,
@@ -1163,7 +1213,6 @@ async function analyze(){
       searchContext += '\n【⚠️ 角球数据提示】当前未获取到两队角球数据，建议使用联赛基准线或基于盘口反推。\n';
     }
 
-    // 显示 credit 信息
     if (cached && (Date.now() - cached.ts < 86400000)) {
       creditDisplay.textContent = '📦 使用缓存数据，本次消耗 0 个 API credit';
     } else {
@@ -1172,7 +1221,6 @@ async function analyze(){
     }
     creditDisplay.style.display = '';
 
-    // ── 读取快照 ──
     var snapData = loadSnapshot(ST.league, home, away);
     var currentOdds = null;
     if(finalOddsText){
@@ -1201,6 +1249,10 @@ async function analyze(){
     };
     statusEl.textContent = '🧠 分析中（DeepSeek Pro）…约30-90秒';
     var r = await runAnalysis(params, dsKey);
+    
+    // ---- 后处理：比分一致性校验 ----
+    r = validateAndFixScore(r);
+    
     ST.result = r;
     if(r.odds_snapshot && r.odds_snapshot.home != null){
       if(r.odds_snapshot.home && r.odds_snapshot.draw && r.odds_snapshot.away){
@@ -1274,7 +1326,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果（同原有，无改动）
+// 渲染结果（含多级推荐展示）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1287,7 +1339,7 @@ function renderResults(snapData){
   });
   var h = '';
 
-  // 关键数据
+  // 关键数据（同原有）
   var kd = r.key_data || {};
   if(kd.home_corner_home || kd.away_corner_away){
     h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:8px">📊 关键数据</div>';
@@ -1302,7 +1354,7 @@ function renderResults(snapData){
     h += '</div></div>';
   }
 
-  // 快照对比
+  // 快照对比（同原有）
   if(snapData){
     var snap = snapData;
     var current = r.odds_snapshot || {};
@@ -1331,7 +1383,7 @@ function renderResults(snapData){
     }
   }
 
-  // 预测结果
+  // 预测结果（含比分修正提示）
   var pr = r.probs || {};
   var g = r.goals || {};
   var cn = r.corners || {};
@@ -1339,6 +1391,9 @@ function renderResults(snapData){
   
   h += '<div class="card" style="border-color:#F5B84188;background:#F5B84108">';
   h += '<div style="font-size:12px;color:#F5B841;font-weight:700;letter-spacing:.1em;margin-bottom:8px">🔮 预测结果（自动记入验证）</div>';
+  if (r._score_fixed) {
+    h += '<div style="font-size:11px;color:#FB923C;margin-bottom:6px">⚠️ 比分已自动修正为与预测方向一致</div>';
+  }
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">';
   h += '<div><span style="color:#54678C">胜平负</span><br><b style="color:#E6EDF7">'+predLabel+'</b></div>';
   h += '<div><span style="color:#54678C">比分</span><br><b style="color:#F5B841">'+(r.predicted_score || '—')+'</b></div>';
@@ -1352,7 +1407,7 @@ function renderResults(snapData){
   h += '<div style="font-size:10.5px;color:#54678C;margin-top:8px">✅ 已自动记入验证系统</div>';
   h += '</div>';
 
-  // 动机
+  // 动机闸门（同原有）
   var gmap = {proceed:['动机清晰','#34D399'], caution:['单边存疑','#F5B841'], skip:['动机浑浊·观望','#F87171']};
   var gv = gmap[r.gate] || ['未知','#8CA0C0'];
   h += '<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em">动机闸门</span><span style="padding:4px 12px;border-radius:999px;border:1px solid '+gv[1]+';color:'+gv[1]+';font-size:12.5px;font-weight:700;background:'+gv[1]+'14">'+gv[0]+'</span></div>';
@@ -1402,14 +1457,13 @@ function renderResults(snapData){
     h += '</div>';
   }
 
-  // ── 三区块结论 ──
+  // ── 三区块结论（含多级推荐） ──
   var rec = r.rec;
   if(rec){
     var main = rec.main || {};
     var upset = rec.upset;
     var value = rec.value || [];
     var signalAlert = rec.signal_alert || null;
-    var isWatch = rec.conf === '观望' || !main.dir;
 
     // 强制 Edge 同步
     if (main.dir && markets.length > 0) {
@@ -1442,35 +1496,66 @@ function renderResults(snapData){
       }
     }
 
+    // 获取主推方向的阈值和推荐级别
+    var mainThreshold = main.dir ? getEdgeThreshold(main.dir) : 0.04;
+    var recLevel = getRecommendationLevel(main, mainThreshold);
+
     h += '<div class="slip"><div class="slip-bar"></div>';
     h += '<div style="font-size:10px;letter-spacing:.25em;color:#54678C;margin-bottom:10px">📋 结论 · 胜率优先模式</div>';
 
-    if(isWatch){
-      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #F8717155;margin-bottom:10px">';
-      h += '<div style="color:#F87171;font-weight:700;font-size:16px">本场观望</div>';
-      h += '<div style="font-size:11.5px;color:#8CA0C0;margin-top:4px">最高概率方向 Edge 不达标，暂不推荐</div>';
-      h += '</div>';
-    } else {
+    // ---- 推荐卡片（根据级别显示不同样式） ----
+    if (recLevel.level === 'strong') {
+      // 主推
       var mainEdge = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
-      var mainColor = main.edge != null && main.edge >= 0.04 ? '#34D399' : (main.edge != null && main.edge > 0 ? '#F5B841' : '#F87171');
-      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid '+(main.edge != null && main.edge >= 0.04 ? '#34D39955' : '#F5B84155')+';margin-bottom:10px">';
-      h += '<div style="font-size:10px;color:'+(main.edge != null && main.edge >= 0.04 ? '#34D399' : '#F5B841')+';font-weight:700;letter-spacing:.08em">✅ 主推（胜率优先）</div>';
+      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #34D39955;margin-bottom:10px">';
+      h += '<div style="font-size:10px;color:#34D399;font-weight:700;letter-spacing:.08em">✅ 主推（Edge达标）</div>';
       h += '<div style="font-size:18px;font-weight:900;color:#F5B841;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#8CA0C0;font-weight:400">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#8CA0C0;margin-top:4px">';
       h += '<span>胜率 <b style="color:#E6EDF7">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
-      h += '<span>Edge <b style="color:'+mainColor+'">'+mainEdge+'</b></span>';
+      h += '<span>Edge <b style="color:#34D399">'+mainEdge+'</b></span>';
       if(rec.stake) h += '<span>注码 <b style="color:#E6EDF7">'+esc(rec.stake)+'</b></span>';
       h += '</div>';
       if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
-      if(main.edge != null && main.edge < 0.04 && main.edge > 0){
-        h += '<div style="font-size:11px;color:#FB923C;margin-top:4px">⚠️ Edge低于4%阈值，建议轻注或观望</div>';
-      }
-      if(main.edge != null && main.edge < 0){
-        h += '<div style="font-size:11px;color:#F87171;margin-top:4px">⛔ Edge为负，建议观望</div>';
+      h += '</div>';
+    } else if (recLevel.level === 'light') {
+      // 轻注关注
+      var mainEdge2 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
+      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #FB923C55;margin-bottom:10px">';
+      h += '<div style="font-size:10px;color:#FB923C;font-weight:700;letter-spacing:.08em">⚡ 轻注关注（Edge未达阈值，建议小额试探）</div>';
+      h += '<div style="font-size:18px;font-weight:900;color:#F5B841;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#8CA0C0;font-weight:400">@'+(main.odds || '—')+'</span></div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#8CA0C0;margin-top:4px">';
+      h += '<span>胜率 <b style="color:#E6EDF7">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
+      h += '<span>Edge <b style="color:#FB923C">'+mainEdge2+'</b></span>';
+      h += '<span style="color:#54678C">阈值 '+(mainThreshold*100).toFixed(0)+'%</span>';
+      h += '</div>';
+      if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
+      h += '</div>';
+    } else if (recLevel.level === 'hint') {
+      // 倾向提示
+      var mainEdge3 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
+      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #6FA8F544;margin-bottom:10px">';
+      h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em">📌 倾向提示（正Edge但未达阈值，仅供参考）</div>';
+      h += '<div style="font-size:16px;font-weight:700;color:#8CA0C0;margin-top:2px">'+esc(main.dir)+' <span style="font-size:13px;color:#54678C">@'+(main.odds || '—')+'</span></div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#8CA0C0;margin-top:4px">';
+      h += '<span>胜率 <b style="color:#E6EDF7">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
+      h += '<span>Edge <b style="color:#6FA8F5">'+mainEdge3+'</b></span>';
+      h += '<span style="color:#54678C">低于阈值 '+(mainThreshold*100).toFixed(0)+'%</span>';
+      h += '</div>';
+      if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
+      h += '</div>';
+    } else {
+      // 完全观望
+      h += '<div style="padding:12px;background:#0E1626;border-radius:8px;border:1px solid #54678C55;margin-bottom:10px">';
+      h += '<div style="color:#54678C;font-weight:700;font-size:16px">⏸️ 观望</div>';
+      if (main && main.dir) {
+        h += '<div style="font-size:11.5px;color:#8CA0C0;margin-top:4px">'+esc(main.dir)+' Edge为负或概率偏低，暂不推荐</div>';
+      } else {
+        h += '<div style="font-size:11.5px;color:#8CA0C0;margin-top:4px">无明确方向，暂不推荐</div>';
       }
       h += '</div>';
     }
 
+    // 爆冷预警（同原有）
     if(upset && upset.dir){
       h += '<div style="padding:10px 12px;background:#EF444414;border:1px solid #EF444455;border-radius:8px;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#EF4444;font-weight:700;letter-spacing:.08em">⚠️ 爆冷预警</div>';
@@ -1487,6 +1572,7 @@ function renderResults(snapData){
       h += '</div>';
     }
 
+    // 价值补充（同原有）
     if(value && value.length > 0){
       h += '<div style="padding:10px 12px;background:#6FA8F514;border:1px solid #6FA8F544;border-radius:8px">';
       h += '<div style="font-size:10px;color:#6FA8F5;font-weight:700;letter-spacing:.08em;margin-bottom:6px">📌 价值补充（可选）</div>';
@@ -1507,7 +1593,8 @@ function renderResults(snapData){
       h += '</div>';
     }
 
-    if(!isWatch){
+    // 只有主推或轻注时才显示“记入投注日志”按钮
+    if (recLevel.level === 'strong' || recLevel.level === 'light') {
       h += '<button class="btn-s gold" id="rec-btn" style="margin-top:12px;font-weight:700">+ 记入投注日志</button>';
     }
     h += '</div>';
@@ -1524,6 +1611,7 @@ function renderResults(snapData){
   var rb = document.getElementById('rec-btn'); if(rb) rb.addEventListener('click', recordBet);
 }
 
+// ── 投注日志 ──
 function recordBet(){
   var r = ST.result; if(!r || !r.rec) return;
   var home = getField('home'), away = getField('away');
@@ -1545,6 +1633,7 @@ function recordBet(){
   ST.log.unshift(entry); saveLog(ST.log); switchTab('log'); refreshLog();
 }
 
+// ── 验证系统 ──
 function saveActual(id, score, corners){
   var actual_1x2 = null;
   var parts = (score || '').split('-');
