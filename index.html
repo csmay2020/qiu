@@ -1045,7 +1045,7 @@ function getOver25Range(expTotal) {
 }
 
 // =====================================================================
-// 核心校验函数（增强版）
+// 核心校验函数（增强版 - 修复角球预期计算）
 // =====================================================================
 function validateAndFixScore(r) {
   if (!r) return r;
@@ -1085,22 +1085,59 @@ function validateAndFixScore(r) {
     r._max_prob_value = maxProb;
   }
 
-  // 4. 角球预期补全（如果数据库有数据且AI未生成）
+  // 4. ★★★ 角球预期修复（增强版）★★★
   var league = ST.league;
   var home = getField('home');
   var away = getField('away');
   if (!r.corners) r.corners = {};
-  if (r.corners.exp_total === null || r.corners.exp_total === undefined) {
-    var cornerLookup = lookupCorners(league, home, away);
-    if (cornerLookup && cornerLookup.total !== null) {
-      r.corners.exp_total = cornerLookup.total;
+  
+  // 从数据库获取角球数据
+  var cornerLookup = lookupCorners(league, home, away);
+  var dbTotal = cornerLookup && cornerLookup.total !== null ? cornerLookup.total : null;
+  var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
+  var dbAway = cornerLookup && cornerLookup.away ? cornerLookup.away.avg : null;
+  
+  // 4a. 如果 exp_home 和 exp_away 都有值，但 exp_total 不等于两者之和，则修正
+  if (r.corners.exp_home !== null && r.corners.exp_home !== undefined &&
+      r.corners.exp_away !== null && r.corners.exp_away !== undefined &&
+      r.corners.exp_total !== null && r.corners.exp_total !== undefined) {
+    var sumFromComponents = r.corners.exp_home + r.corners.exp_away;
+    if (Math.abs(r.corners.exp_total - sumFromComponents) > 0.5) {
+      console.log('[校验] exp_total ' + r.corners.exp_total + ' 不等于 exp_home(' + r.corners.exp_home + ') + exp_away(' + r.corners.exp_away + ') = ' + sumFromComponents + '，自动修正');
+      r.corners.exp_total = Math.round(sumFromComponents * 10) / 10;
+      fixed = true;
+      fixMessages.push('角球预期已修正为 ' + r.corners.exp_total + '（由两队角球数据相加）');
+    }
+  }
+  
+  // 4b. 如果数据库有数据，且 AI 生成的 exp_total 与数据库值偏差超过 ±2，则用数据库值覆盖
+  if (dbTotal !== null) {
+    var aiTotal = r.corners.exp_total;
+    if (aiTotal === null || aiTotal === undefined || Math.abs(aiTotal - dbTotal) > 2) {
+      console.log('[校验] AI角球预期 ' + aiTotal + ' 与数据库值 ' + dbTotal + ' 偏差过大，使用数据库值');
+      r.corners.exp_total = Math.round(dbTotal * 10) / 10;
+      if (dbHome !== null) r.corners.exp_home = Math.round(dbHome * 10) / 10;
+      if (dbAway !== null) r.corners.exp_away = Math.round(dbAway * 10) / 10;
       r.corners.data_home = cornerLookup.home ? cornerLookup.home.team + ' 场均' + cornerLookup.home.avg : '';
       r.corners.data_away = cornerLookup.away ? cornerLookup.away.team + ' 场均' + cornerLookup.away.avg : '';
-      r.corners.note = '数据库预期值（仅供参考，无盘口时不推荐）';
+      r.corners.note = '数据库预期值（已修正AI计算错误）';
       r._corners_filled = true;
       fixed = true;
-      fixMessages.push('角球预期已从数据库补全');
+      fixMessages.push('角球预期已从 ' + (aiTotal !== null && aiTotal !== undefined ? aiTotal.toFixed(1) : 'null') + ' 修正为数据库值 ' + r.corners.exp_total.toFixed(1));
     }
+  }
+  
+  // 4c. 如果数据库有数据但 AI 完全没有生成角球预期，直接补全
+  if (dbTotal !== null && (r.corners.exp_total === null || r.corners.exp_total === undefined)) {
+    r.corners.exp_total = Math.round(dbTotal * 10) / 10;
+    if (dbHome !== null) r.corners.exp_home = Math.round(dbHome * 10) / 10;
+    if (dbAway !== null) r.corners.exp_away = Math.round(dbAway * 10) / 10;
+    r.corners.data_home = cornerLookup.home ? cornerLookup.home.team + ' 场均' + cornerLookup.home.avg : '';
+    r.corners.data_away = cornerLookup.away ? cornerLookup.away.team + ' 场均' + cornerLookup.away.avg : '';
+    r.corners.note = '数据库预期值（仅供参考，无盘口时不推荐）';
+    r._corners_filled = true;
+    fixed = true;
+    fixMessages.push('角球预期已从数据库补全');
   }
 
   // 5. 修正 markets 中的赔率与 odds_snapshot 不一致（特别是平局）
