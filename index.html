@@ -6,6 +6,7 @@
 <title>盘口价值分析终端 · 动机扭曲版</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
+/* 样式不变，略... 为节省篇幅，此处省略样式，实际使用时请保留原有样式 */
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0B1220;color:#E6EDF7;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
 input,textarea,select,button{font-family:inherit;font-size:14px}
@@ -65,9 +66,14 @@ select option{background:#121B2E}
       <input id="ds-key-inp" class="inp" type="password" placeholder="sk-…" style="font-size:12px;padding:6px 10px;width:100%">
     </div>
     <div style="margin-bottom:6px">
-      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">Tavily API Key（tavily.com 注册）</label>
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">UnSearch API Key（主引擎，unsearch.dev 注册）</label>
+      <input id="unsearch-key-inp" class="inp" type="password" placeholder="un-…" style="font-size:12px;padding:6px 10px;width:100%">
+      <div style="font-size:10px;color:#6FA8F5;margin-top:2px">免费额度 5000次/月，优先使用</div>
+    </div>
+    <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">Tavily API Key（备用，tavily.com 注册）</label>
       <input id="tavily-key-inp" class="inp" type="password" placeholder="tvly-…" style="font-size:12px;padding:6px 10px;width:100%">
-      <div style="font-size:10px;color:#6FA8F5;margin-top:2px">免费层每月1000次搜索</div>
+      <div style="font-size:10px;color:#6FA8F5;margin-top:2px">免费层每月1000次，仅当UnSearch不可用时使用</div>
     </div>
     <div style="margin-bottom:6px">
       <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">OCR.space API Key（可选）</label>
@@ -120,8 +126,8 @@ select option{background:#121B2E}
   <div class="card">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span id="league-row"></span></div>
     <div class="g2" style="margin-bottom:8px">
-      <input class="inp" id="inp-home" placeholder="主队">
-      <input class="inp" id="inp-away" placeholder="客队">
+      <input class="inp" id="inp-home" placeholder="主队（支持中文名）">
+      <input class="inp" id="inp-away" placeholder="客队（支持中文名）">
     </div>
     <div class="g2">
       <input class="inp" id="inp-kickoff" placeholder="开赛时间（可选）">
@@ -179,6 +185,90 @@ select option{background:#121B2E}
 
 <script>
 'use strict';
+
+// =====================================================================
+// 中文→英文 队名映射（用户可以自行添加）
+// =====================================================================
+var TEAM_NAME_MAP = {
+  // 欧冠/欧战常见球队
+  "塞萨洛尼基": "PAOK",
+  "基辅迪纳摩": "Dynamo Kyiv",
+  "波兹南": "Lech Poznań",
+  "奥胡斯": "AGF Aarhus",
+  // 五大联赛常用中文名（示例）
+  "皇家马德里": "Real Madrid",
+  "巴塞罗那": "Barcelona",
+  "马德里竞技": "Atletico Madrid",
+  "拜仁慕尼黑": "Bayern Munich",
+  "多特蒙德": "Borussia Dortmund",
+  "勒沃库森": "Bayer Leverkusen",
+  "曼城": "Manchester City",
+  "利物浦": "Liverpool",
+  "阿森纳": "Arsenal",
+  "切尔西": "Chelsea",
+  "曼联": "Manchester United",
+  "热刺": "Tottenham",
+  "纽卡斯尔": "Newcastle",
+  "阿斯顿维拉": "Aston Villa",
+  "巴黎圣日耳曼": "Paris Saint-Germain",
+  "马赛": "Marseille",
+  "里昂": "Lyon",
+  "摩纳哥": "Monaco",
+  "国际米兰": "Inter Milan",
+  "AC米兰": "AC Milan",
+  "尤文图斯": "Juventus",
+  "那不勒斯": "Napoli",
+  "罗马": "Roma",
+  "亚特兰大": "Atalanta",
+  // 挪超
+  "博德闪耀": "Bodø/Glimt",
+  "莫尔德": "Molde",
+  "罗森博格": "Rosenborg",
+  "布兰": "Brann",
+  "维京": "Viking",
+  // MLS
+  "迈阿密国际": "Inter Miami",
+  "洛杉矶FC": "Los Angeles FC",
+  "洛杉矶银河": "LA Galaxy",
+  "西雅图海湾人": "Seattle Sounders",
+  "纽约红牛": "New York RB",
+  "纽约城": "New York City",
+  "奥兰多城": "Orlando City",
+  "多伦多": "Toronto",
+  "温哥华白浪": "Vancouver Whitecaps",
+  "新英格兰革命": "New England",
+  "费城联合": "Philadelphia Union",
+  "亚特兰大联": "Atlanta United",
+  "芝加哥火焰": "Chicago Fire",
+  "达拉斯": "Dallas",
+  "休斯顿迪纳摩": "Houston Dynamo",
+  "圣路易斯城": "St. Louis City",
+  "明尼苏达联": "Minnesota United",
+  "科罗拉多急流": "Colorado Rapids",
+  "皇家盐湖城": "Real Salt Lake",
+  "波特兰伐木工": "Portland Timbers",
+  "辛辛那提": "Cincinnati",
+  "纳什维尔": "Nashville SC",
+  "哥伦布机员": "Columbus Crew",
+  "华盛顿联": "DC United",
+  "圣何塞地震": "SJ Earthquakes",
+  "堪萨斯城": "Sporting KC",
+  "夏洛特": "Charlotte",
+  "奥斯汀": "Austin",
+  "圣迭戈": "San Diego",
+  "CF蒙特利尔": "CF Montreal"
+  // 你可以继续添加更多
+};
+
+// 辅助函数：尝试将中文名转换为英文名
+function normalizeTeamName(name) {
+  if (!name) return name;
+  var trimmed = name.trim();
+  // 如果映射表中有，直接返回英文名
+  if (TEAM_NAME_MAP[trimmed]) return TEAM_NAME_MAP[trimmed];
+  // 否则返回原样（可能是英文或未收录的中文）
+  return trimmed;
+}
 
 // =====================================================================
 // 角球数据库
@@ -271,6 +361,9 @@ var CORNER_DB = {
 function lookupCorners(league, home, away){
   var db = CORNER_DB[league];
   if(!db) return null;
+  // 将中文名转为英文
+  var homeNorm = normalizeTeamName(home);
+  var awayNorm = normalizeTeamName(away);
   function findTeam(name){
     if(!name) return null;
     var n = name.trim();
@@ -286,7 +379,7 @@ function lookupCorners(league, home, away){
     }
     return null;
   }
-  var h = findTeam(home), a = findTeam(away);
+  var h = findTeam(homeNorm), a = findTeam(awayNorm);
   if(!h && !a) return null;
   return {home:h, away:a, total:(h?h.avg:0)+(a?a.avg:0)};
 }
@@ -395,6 +488,7 @@ function updateSnapshotUI(league, home, away){
 // ── 状态 ──
 var ST = {
   dsKey: localStorage.getItem('ds_key') || '',
+  unsearchKey: localStorage.getItem('unsearch_key') || '',
   tavilyKey: localStorage.getItem('tavily_key') || '',
   ocrspaceKey: localStorage.getItem('ocrspace_key') || '',
   iosUrl: localStorage.getItem('ios_url') || 'http://10.0.1.11:8000',
@@ -581,9 +675,43 @@ async function recognizeImageWithOCR(base64Image) {
 }
 
 // =====================================================================
-// Tavily 搜索
+// UnSearch 搜索
 // =====================================================================
+async function unsearchSearch(query, apiKey) {
+  if (!apiKey) {
+    console.warn('[UnSearch] 缺少 API Key');
+    return null;
+  }
+  try {
+    console.log('[UnSearch] 搜索:', query);
+    var resp = await fetch('https://api.unsearch.dev/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        search_depth: "basic",
+        max_results: 4,
+        include_answer: true,
+        include_raw_content: false
+      })
+    });
+    var data = await resp.json();
+    console.log('[UnSearch] 结果:', data.results ? data.results.length : 0, '条');
+    return {
+      results: data.results || [],
+      answer: data.answer || '',
+      credit_used: data.credit_used || 1
+    };
+  } catch(e) {
+    console.error('[UnSearch] 异常:', e);
+    return null;
+  }
+}
 
+// =====================================================================
+// Tavily 搜索（保留作为备用）
+// =====================================================================
 async function tavilySearch(query, apiKey) {
   if (!apiKey) {
     console.warn('[Tavily] 缺少 API Key');
@@ -617,6 +745,27 @@ async function tavilySearch(query, apiKey) {
 }
 
 // =====================================================================
+// 统一搜索接口：优先 UnSearch，失败降级 Tavily
+// =====================================================================
+async function smartSearch(query, unsearchKey, tavilyKey) {
+  // 尝试 UnSearch
+  if (unsearchKey) {
+    var result = await unsearchSearch(query, unsearchKey);
+    if (result && (result.results.length > 0 || result.answer)) {
+      return { ...result, engine: 'UnSearch' };
+    }
+    console.warn('[SmartSearch] UnSearch 无结果或失败，降级到 Tavily');
+  }
+  // 降级到 Tavily
+  if (tavilyKey) {
+    var tavResult = await tavilySearch(query, tavilyKey);
+    return { ...tavResult, engine: 'Tavily' };
+  }
+  // 两者都不可用
+  throw new Error('没有可用的搜索引擎，请在设置中填写 UnSearch 或 Tavily API Key');
+}
+
+// =====================================================================
 // Prompt 构建（含动机扭曲案例库）
 // =====================================================================
 function buildPrompt(params){
@@ -627,7 +776,7 @@ function buildPrompt(params){
   var cornerLookup = lookupCorners(league, home, away);
   var cornerDBText = '';
   if(!cornerLookup){
-    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请优先使用Tavily搜索的角球数据。';
+    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请优先使用搜索的角球数据。';
   } else {
     var lines = ['【⚡ 角球数据库（Statz 2026赛季实测）】'];
     if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均角球：'+cornerLookup.home.avg);
@@ -727,7 +876,7 @@ function buildPrompt(params){
 ${oddsText ? "【PROLINE+盘口实价（OCR识别）】\n" + oddsText : "【未提供盘口实价，markets中odds填null】"}
 ${snapContext}
 
-【🔎 搜索结果（Tavily 实时检索）】
+【🔎 搜索结果（搜索聚合）】
 ${searchContext}
 
 因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态 ⑤盘口变动
@@ -861,10 +1010,11 @@ async function runAnalysis(params, dsKey) {
 }
 
 // =====================================================================
-// 分析主流程（含缓存 + 角球数据库跳过）
+// 分析主流程（含缓存 + 角球数据库跳过 + 双引擎）
 // =====================================================================
 async function analyze(){
   var dsKey = document.getElementById('ds-key-inp').value.trim();
+  var unsearchKey = document.getElementById('unsearch-key-inp').value.trim();
   var tavilyKey = document.getElementById('tavily-key-inp').value.trim();
   var ocrspaceKey = document.getElementById('ocrspace-key-inp').value.trim();
   var engine = document.querySelector('input[name="ocrEngine"]:checked');
@@ -875,11 +1025,13 @@ async function analyze(){
   localStorage.setItem('ios_url', ST.iosUrl);
   ST.ocrspaceKey = ocrspaceKey;
   localStorage.setItem('ocrspace_key', ocrspaceKey);
+  ST.unsearchKey = unsearchKey;
+  localStorage.setItem('unsearch_key', unsearchKey);
   ST.tavilyKey = tavilyKey;
   localStorage.setItem('tavily_key', tavilyKey);
 
   if(!dsKey){ alert('请先填入DeepSeek API Key'); return; }
-  if(!tavilyKey){ alert('请先填入Tavily API Key'); return; }
+  if(!unsearchKey && !tavilyKey){ alert('请至少填入 UnSearch 或 Tavily API Key'); return; }
   if(engine.value === 'ocrspace' && !ocrspaceKey){ alert('请先填入OCR.space API Key'); return; }
   var home = getField('home'), away = getField('away');
   if(!home || !away){ alert('请填写主客队名称'); return; }
@@ -915,11 +1067,12 @@ async function analyze(){
     var finalOddsText = ST.oddsMode === 'txt' ? getField('odds') : ocrCombinedText;
 
     // ── 缓存 key ──
-    var cacheKey = 'tavily_cache_' + ST.league + '_' + home.toLowerCase() + '_' + away.toLowerCase();
+    var cacheKey = 'search_cache_' + ST.league + '_' + home.toLowerCase() + '_' + away.toLowerCase();
     var cached = dbGet(cacheKey);
     var searchContext = '';
     var cornerDataFound = false;
     var totalCredits = 0;
+    var usedEngine = 'Unknown';
 
     // 检查缓存是否有效（24小时内）
     if (cached && cached.ts && (Date.now() - cached.ts < 86400000)) {
@@ -930,7 +1083,7 @@ async function analyze(){
       console.log('[缓存] 命中，跳过搜索');
     } else {
       // ── 缓存未命中，执行搜索 ──
-      statusEl.textContent = '🔎 搜索比赛信息（Tavily）…';
+      statusEl.textContent = '🔎 搜索比赛信息（UnSearch 优先）…';
 
       // 检查角球数据库
       var cornerLookup = lookupCorners(ST.league, home, away);
@@ -965,9 +1118,10 @@ async function analyze(){
       var searchResults = {};
 
       for (var i = 0; i < allQueries.length; i++) {
-        var result = await tavilySearch(allQueries[i], tavilyKey);
+        var result = await smartSearch(allQueries[i], unsearchKey, tavilyKey);
         searchResults[allQueries[i]] = result;
         totalCredits += result.credit_used || 0;
+        usedEngine = result.engine || usedEngine;
         if (extraQueries.length > 0 && allQueries[i].indexOf('corners') >= 0 && (result.answer || (result.results && result.results.length > 0))) {
           cornerDataFound = true;
         }
@@ -1009,9 +1163,13 @@ async function analyze(){
       searchContext += '\n【⚠️ 角球数据提示】当前未获取到两队角球数据，建议使用联赛基准线或基于盘口反推。\n';
     }
 
-    creditDisplay.textContent = cached && (Date.now() - cached.ts < 86400000) 
-      ? '📦 使用缓存数据，本次消耗 0 个 Tavily credit' 
-      : '🔎 本次搜索消耗 ' + totalCredits + ' 个 Tavily credit（免费层每月1000个）';
+    // 显示 credit 信息
+    if (cached && (Date.now() - cached.ts < 86400000)) {
+      creditDisplay.textContent = '📦 使用缓存数据，本次消耗 0 个 API credit';
+    } else {
+      var engineLabel = usedEngine === 'UnSearch' ? 'UnSearch（免费5000次/月）' : 'Tavily（1000次/月）';
+      creditDisplay.textContent = '🔎 本次搜索由 ' + engineLabel + ' 提供，消耗 ' + totalCredits + ' 个 credit';
+    }
     creditDisplay.style.display = '';
 
     // ── 读取快照 ──
@@ -1571,7 +1729,7 @@ function switchTab(tab){
 
 function updateKeyUI(){
   var badge = document.getElementById('key-badge');
-  if(badge){ if(ST.dsKey && ST.tavilyKey){ badge.textContent = '✓ Keys已设置'; badge.style.color = '#34D399'; } else { badge.textContent = '⚡ 点击设置 API Keys'; badge.style.color = '#F5B841'; } }
+  if(badge){ if(ST.dsKey && (ST.unsearchKey || ST.tavilyKey)){ badge.textContent = '✓ Keys已设置'; badge.style.color = '#34D399'; } else { badge.textContent = '⚡ 点击设置 API Keys'; badge.style.color = '#F5B841'; } }
 }
 
 function toggleKeyPanel(){
@@ -1593,16 +1751,18 @@ function updateEngineStatus(){
 function init(){
   ST.log = loadLog(); ST.verify = loadVerify();
   var dsKey = localStorage.getItem('ds_key') || '';
+  var unsearchKey = localStorage.getItem('unsearch_key') || '';
   var tavilyKey = localStorage.getItem('tavily_key') || '';
   var ocrspaceKey = localStorage.getItem('ocrspace_key') || '';
   var iosUrl = localStorage.getItem('ios_url') || 'http://10.0.1.11:8000';
   var engine = localStorage.getItem('ocr_engine') || 'ios';
 
   document.getElementById('ds-key-inp').value = dsKey;
+  document.getElementById('unsearch-key-inp').value = unsearchKey;
   document.getElementById('tavily-key-inp').value = tavilyKey;
   document.getElementById('ocrspace-key-inp').value = ocrspaceKey;
   document.getElementById('ios-url-inp').value = iosUrl;
-  ST.dsKey = dsKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine;
+  ST.dsKey = dsKey; ST.unsearchKey = unsearchKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine;
   updateKeyUI();
 
   var radios = document.querySelectorAll('input[name="ocrEngine"]');
@@ -1652,29 +1812,37 @@ function init(){
   document.getElementById('key-toggle').addEventListener('click', toggleKeyPanel);
   document.getElementById('key-show').addEventListener('click', function(){
     var ds = document.getElementById('ds-key-inp');
+    var un = document.getElementById('unsearch-key-inp');
     var tv = document.getElementById('tavily-key-inp');
     var ocr = document.getElementById('ocrspace-key-inp');
     if(ds.type === 'password'){
-      ds.type = 'text'; tv.type = 'text'; ocr.type = 'text';
+      ds.type = 'text'; un.type = 'text'; tv.type = 'text'; ocr.type = 'text';
       this.textContent = '隐藏Keys';
     } else {
-      ds.type = 'password'; tv.type = 'password'; ocr.type = 'password';
+      ds.type = 'password'; un.type = 'password'; tv.type = 'password'; ocr.type = 'password';
       this.textContent = '显示Keys';
     }
   });
   document.getElementById('key-clear').addEventListener('click', function(){
     localStorage.removeItem('ds_key');
+    localStorage.removeItem('unsearch_key');
     localStorage.removeItem('tavily_key');
     localStorage.removeItem('ocrspace_key');
     document.getElementById('ds-key-inp').value = '';
+    document.getElementById('unsearch-key-inp').value = '';
     document.getElementById('tavily-key-inp').value = '';
     document.getElementById('ocrspace-key-inp').value = '';
-    ST.dsKey = ''; ST.tavilyKey = ''; ST.ocrspaceKey = '';
+    ST.dsKey = ''; ST.unsearchKey = ''; ST.tavilyKey = ''; ST.ocrspaceKey = '';
     updateKeyUI();
   });
   document.getElementById('ds-key-inp').addEventListener('input', function(){
     localStorage.setItem('ds_key', this.value);
     ST.dsKey = this.value;
+    updateKeyUI();
+  });
+  document.getElementById('unsearch-key-inp').addEventListener('input', function(){
+    localStorage.setItem('unsearch_key', this.value);
+    ST.unsearchKey = this.value;
     updateKeyUI();
   });
   document.getElementById('tavily-key-inp').addEventListener('input', function(){
