@@ -528,6 +528,7 @@ var ST = {
   keyPanelOpen: !localStorage.getItem('ds_key'),
   tab: 'analyze',
   league: '英超',
+  context: 'regular',
   busy: false,
   statusIdx: 0,
   result: null,
@@ -1071,6 +1072,133 @@ function getOver25Range(expTotal) {
 }
 
 // =====================================================================
+// ★★★ 置信度评分函数 ★★★
+// =====================================================================
+function calculateConfidence(r, home, away, league, context) {
+  var score = 0;
+  var details = [];
+
+  // 1. 角球数据完整度（25分）
+  var cornerScore = 0;
+  var kd = r.key_data || {};
+  var cornerLookup = lookupCorners(league, home, away);
+  var hasDbHome = cornerLookup && cornerLookup.home ? true : false;
+  var hasDbAway = cornerLookup && cornerLookup.away ? true : false;
+  var hasAiHome = kd.home_corner_home && kd.home_corner_home.match(/\d/);
+  var hasAiAway = kd.away_corner_away && kd.away_corner_away.match(/\d/);
+  var hasHomeCorner = hasDbHome || hasAiHome;
+  var hasAwayCorner = hasDbAway || hasAiAway;
+  
+  if (hasHomeCorner && hasAwayCorner) {
+    cornerScore = 25;
+    details.push('两队角球数据齐全（+25）');
+  } else if (hasHomeCorner || hasAwayCorner) {
+    cornerScore = 15;
+    details.push('仅一队有角球数据（+15）');
+  } else {
+    cornerScore = 5;
+    details.push('角球数据缺失（+5）');
+  }
+  score += cornerScore;
+
+  // 2. 关键数据完整度（20分）
+  var dataFields = [
+    kd.home_goals_home,
+    kd.away_goals_away,
+    kd.home_over25_rate,
+    kd.away_over25_rate
+  ];
+  var filledCount = dataFields.filter(function(f){ return f && f.match(/\d/); }).length;
+  
+  if (filledCount >= 4) {
+    score += 20;
+    details.push('关键数据完整（+20）');
+  } else if (filledCount >= 2) {
+    score += 12;
+    details.push('关键数据部分完整（+12）');
+  } else {
+    score += 5;
+    details.push('关键数据缺失（+5）');
+  }
+
+  // 3. 队名匹配度（15分）
+  var nameScore = 0;
+  if (TEAM_NAME_MAP[home]) nameScore += 7;
+  if (TEAM_NAME_MAP[away]) nameScore += 8;
+  if (!TEAM_NAME_MAP[home] && hasDbHome) nameScore = Math.max(nameScore, 7);
+  if (!TEAM_NAME_MAP[away] && hasDbAway) nameScore = Math.max(nameScore, 8);
+  score += Math.min(nameScore, 15);
+  if (nameScore >= 12) details.push('队名匹配度高（+'+Math.min(nameScore,15)+'）');
+  else if (nameScore >= 6) details.push('队名部分匹配（+'+Math.min(nameScore,15)+'）');
+  else details.push('队名未匹配（+'+Math.min(nameScore,15)+'）');
+
+  // 4. AI概率集中度（15分）
+  var pr = r.probs || {};
+  var maxP = Math.max(pr.home || 0, pr.draw || 0, pr.away || 0);
+  if (maxP >= 0.55) {
+    score += 15;
+    details.push('概率集中度好（+15）');
+  } else if (maxP >= 0.45) {
+    score += 10;
+    details.push('概率集中度一般（+10）');
+  } else if (maxP >= 0.35) {
+    score += 5;
+    details.push('概率分散（+5）');
+  } else {
+    score += 2;
+    details.push('概率高度分散（+2）');
+  }
+
+  // 5. 市场与AI一致性（15分）
+  var snap = r.odds_snapshot || {};
+  var impliedHome = snap.home ? 1 / snap.home : null;
+  var impliedDraw = snap.draw ? 1 / snap.draw : null;
+  var impliedAway = snap.away ? 1 / snap.away : null;
+  var aiHome = pr.home || 0, aiDraw = pr.draw || 0, aiAway = pr.away || 0;
+  
+  if (impliedHome !== null && impliedDraw !== null && impliedAway !== null) {
+    var marketAll = [{d:'home',p:impliedHome},{d:'draw',p:impliedDraw},{d:'away',p:impliedAway}].sort(function(a,b){ return b.p - a.p; });
+    var aiAll = [{d:'home',p:aiHome},{d:'draw',p:aiDraw},{d:'away',p:aiAway}].sort(function(a,b){ return b.p - a.p; });
+    if (marketAll[0].d === aiAll[0].d) {
+      score += 15;
+      details.push('市场与AI方向一致（+15）');
+    } else if (marketAll[1].d === aiAll[0].d) {
+      score += 8;
+      details.push('市场与AI次高方向一致（+8）');
+    } else {
+      score += 3;
+      details.push('市场与AI方向分歧（+3）');
+    }
+  } else {
+    score += 7;
+    details.push('市场数据部分缺失（+7）');
+  }
+
+  // 6. 比赛情境（10分）
+  var isCup = (context === 'cup_leg1' || context === 'cup_leg2' || context === 'cup_ko');
+  if (!isCup && league) {
+    var leagueName = league || '';
+    if (leagueName.indexOf('杯') >= 0 || leagueName.indexOf('冠') >= 0) isCup = true;
+  }
+  if (isCup) {
+    score += 5;
+    details.push('杯赛情境，数据可靠性略低（+5）');
+  } else {
+    score += 10;
+    details.push('联赛情境，数据可靠性高（+10）');
+  }
+
+  // 确定等级
+  var level, color, icon;
+  if (score >= 80) { level = '高'; color = '#34D399'; icon = '🟢'; }
+  else if (score >= 60) { level = '中'; color = '#F5B841'; icon = '🟡'; }
+  else if (score >= 40) { level = '中低'; color = '#FB923C'; icon = '🟠'; }
+  else { level = '低'; color = '#F87171'; icon = '🔴'; }
+
+  return { score: Math.round(score), level: level, color: color, icon: icon, details: details };
+}
+
+// =====================================================================
 // ★★★ 核心校验函数（增强版 - 比分-大小球一致性 + 角球修复 + 杯赛折扣）★★★
 // =====================================================================
 function validateAndFixScore(r, context) {
@@ -1084,7 +1212,6 @@ function validateAndFixScore(r, context) {
   if (scoreParts && scoreParts.length === 2 && !isNaN(scoreParts[0]) && !isNaN(scoreParts[1])) {
     var totalGoals = scoreParts[0] + scoreParts[1];
     if (!r.goals) r.goals = {};
-    // 只要有比分，就强制修正 over25，不再依赖 AI 原有的值
     if (totalGoals >= 3) {
       r.goals.over25 = 0.58;
       fixed = true;
@@ -1106,7 +1233,7 @@ function validateAndFixScore(r, context) {
     fixMessages.push('比分已从 ' + scoreDir + ' 修正为 ' + maxDir);
   }
 
-  // 2. 校验预期总进球与大2.5概率一致性（但不要覆盖比分校验的结果）
+  // 2. 校验预期总进球与大2.5概率一致性
   var expTotal = r.goals && r.goals.exp_total != null ? r.goals.exp_total : null;
   var over25 = r.goals && r.goals.over25 != null ? r.goals.over25 : null;
   if (expTotal !== null && over25 !== null && expTotal > 0) {
@@ -1255,6 +1382,7 @@ function validateAndFixScore(r, context) {
 
   return r;
 }
+
 // =====================================================================
 // 多级推荐判断
 // =====================================================================
@@ -1539,7 +1667,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果
+// 渲染结果（含置信度评分）
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1551,6 +1679,24 @@ function renderResults(snapData){
     return eb - ea;
   });
   var h = '';
+
+  // ---- ★★★ 置信度评分卡片 ★★★ ----
+  var conf = calculateConfidence(r, home, away, ST.league, ST.context);
+  h += '<div class="card" style="border-left:4px solid ' + conf.color + ';background:' + conf.color + '08;border-radius:12px;margin-bottom:10px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap">';
+  h += '<div style="display:flex;align-items:center;gap:10px">';
+  h += '<span style="font-size:24px;font-weight:900;color:' + conf.color + '">' + conf.icon + '</span>';
+  h += '<div><div style="font-size:14px;font-weight:700;color:' + conf.color + '">' + conf.level + ' 置信度</div>';
+  h += '<div style="font-size:10.5px;color:#54678C">可信度评分：' + conf.score + '/100</div>';
+  h += '</div></div>';
+  h += '<div style="width:120px;height:6px;background:#0E1626;border-radius:3px;overflow:hidden">';
+  h += '<div style="width:' + conf.score + '%;height:100%;background:' + conf.color + ';border-radius:3px"></div>';
+  h += '</div>';
+  h += '</div>';
+  if (conf.score < 40) {
+    h += '<div style="font-size:11px;color:#F87171;margin-top:6px">⚠️ 数据严重不足，预测仅供参考，建议谨慎对待</div>';
+  }
+  h += '</div>';
 
   // ---- 关键数据 ----
   var kd = r.key_data || {};
