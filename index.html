@@ -186,7 +186,7 @@ select option{background:#121B2E}
 'use strict';
 
 // =====================================================================
-// 中文→英文 队名映射（扩充）
+// 中文→英文 队名映射
 // =====================================================================
 var TEAM_NAME_MAP = {
   "塞萨洛尼基": "PAOK",
@@ -358,7 +358,6 @@ var CORNER_DB = {
   }
 };
 
-// ★★★ 核心改动：跨联赛回退查找 ★★★
 function lookupCorners(league, home, away) {
   var db = CORNER_DB[league];
   var homeNorm = normalizeTeamName(home);
@@ -381,7 +380,6 @@ function lookupCorners(league, home, away) {
     return null;
   }
 
-  // 第一步：在当前联赛中查找
   if (db) {
     var h = findTeamInDb(db, homeNorm);
     var a = findTeamInDb(db, awayNorm);
@@ -390,7 +388,6 @@ function lookupCorners(league, home, away) {
     if (!h && a) return { home: null, away: a, total: a.avg };
   }
 
-  // 第二步：跨联赛回退——在所有已知联赛中查找
   var allLeagueKeys = Object.keys(CORNER_DB);
   var foundHome = null;
   var foundAway = null;
@@ -784,7 +781,7 @@ async function smartSearch(query, unsearchKey, tavilyKey) {
 }
 
 // =====================================================================
-// Prompt 构建（含数学一致性约束，增强角球处理）
+// Prompt 构建（含数学一致性约束）
 // =====================================================================
 function buildPrompt(params){
   var today = new Date().toISOString().slice(0,10);
@@ -923,18 +920,9 @@ ${cornerDBText}
 
 【⚠️ 数学一致性要求（强制执行）】
 1. predicted_score 的胜平负结果必须与 probs 中最高概率方向完全一致。
-   - 如果最高概率是 home → 比分必须是主胜（如 2-1, 1-0）
-   - 如果最高概率是 draw → 比分必须是平局（如 1-1, 0-0）
-   - 如果最高概率是 away → 比分必须是客胜（如 1-2, 0-1）
-
-2. goals.exp_total 与 goals.over25 必须保持统计一致性：
-   - exp_total 1.8-2.1 → over25 应为 35%-42%
-   - exp_total 2.2-2.5 → over25 应为 43%-52%
-   - exp_total 2.6-2.9 → over25 应为 53%-62%
-   - exp_total 3.0+ → over25 应为 63%+
-   两者必须匹配，不得出现 exp_total=2.0 但 over25=52% 这类矛盾。
-
-3. 所有 markets 中的 edge 必须准确计算为 AI概率 - 1/赔率，确保数据一致。
+2. goals.exp_total 与 goals.over25 必须保持统计一致性。
+3. predicted_score 的总进球数与 goals.over25 必须一致（总进球≥3 → over25≥50%；总进球≤2 → over25≤50%）。
+4. 所有 markets 中的 edge 必须准确计算为 AI概率 - 1/赔率，确保数据一致。
 
 只输出JSON。格式:
 {
@@ -1041,7 +1029,7 @@ async function runAnalysis(params, dsKey) {
 }
 
 // =====================================================================
-// 辅助函数（比分方向、默认比分等）
+// 辅助函数
 // =====================================================================
 function getScoreDirection(score) {
   if (!score) return null;
@@ -1083,13 +1071,33 @@ function getOver25Range(expTotal) {
 }
 
 // =====================================================================
-// ★★★ 核心校验函数（增强版 - 角球修复 + 杯赛折扣）★★★
+// ★★★ 核心校验函数（增强版 - 比分-大小球一致性 + 角球修复 + 杯赛折扣）★★★
 // =====================================================================
 function validateAndFixScore(r, context) {
   if (!r) return r;
 
   var fixed = false;
   var fixMessages = [];
+
+  // ---- 0. ★★★ 最高优先级：校验 predicted_score 与 over25 一致性 ★★★ ----
+  var scoreParts = r.predicted_score ? r.predicted_score.split('-').map(function(s){ return parseInt(s.trim()); }) : null;
+  if (scoreParts && scoreParts.length === 2 && !isNaN(scoreParts[0]) && !isNaN(scoreParts[1])) {
+    var totalGoals = scoreParts[0] + scoreParts[1];
+    var over25 = r.goals && r.goals.over25 !== null && r.goals.over25 !== undefined ? r.goals.over25 : 0.5;
+    if (totalGoals >= 3 && over25 < 0.5) {
+      var correctedOver25 = Math.round(0.58 * 100) / 100;
+      console.log('[校验] 比分 ' + r.predicted_score + ' 总进球 ' + totalGoals + ' 与 over25 ' + (over25 * 100).toFixed(0) + '% 矛盾，修正为 ' + (correctedOver25 * 100).toFixed(0) + '%');
+      r.goals.over25 = correctedOver25;
+      fixed = true;
+      fixMessages.push('大2.5概率已从 ' + (over25 * 100).toFixed(0) + '% 修正为 ' + (correctedOver25 * 100).toFixed(0) + '%（与比分 ' + r.predicted_score + ' 保持一致）');
+    } else if (totalGoals <= 2 && over25 >= 0.5) {
+      var correctedOver25Small = Math.round(0.38 * 100) / 100;
+      console.log('[校验] 比分 ' + r.predicted_score + ' 总进球 ' + totalGoals + ' 与 over25 ' + (over25 * 100).toFixed(0) + '% 矛盾，修正为 ' + (correctedOver25Small * 100).toFixed(0) + '%');
+      r.goals.over25 = correctedOver25Small;
+      fixed = true;
+      fixMessages.push('大2.5概率已从 ' + (over25 * 100).toFixed(0) + '% 修正为 ' + (correctedOver25Small * 100).toFixed(0) + '%（与比分 ' + r.predicted_score + ' 保持一致）');
+    }
+  }
 
   // 1. 校验比分与方向一致性
   var scoreDir = getScoreDirection(r.predicted_score);
@@ -1106,7 +1114,7 @@ function validateAndFixScore(r, context) {
   var over25 = r.goals && r.goals.over25 != null ? r.goals.over25 : null;
   if (expTotal !== null && over25 !== null && expTotal > 0) {
     var expectedRange = getOver25Range(expTotal);
-    if (over25 < expectedRange.min - 0.08 || over25 > expectedRange.max + 0.08) {
+    if (over25 < expectedRange.min - 0.10 || over25 > expectedRange.max + 0.10) {
       var correctedOver25 = Math.round((expectedRange.min + expectedRange.max) / 2 * 100) / 100;
       console.log('[校验] over25 ' + (over25 * 100).toFixed(1) + '% 与 exp_total=' + expTotal + ' 不一致，修正为 ' + (correctedOver25 * 100).toFixed(1) + '%');
       r.goals.over25 = correctedOver25;
@@ -1123,18 +1131,16 @@ function validateAndFixScore(r, context) {
     r._max_prob_value = maxProb;
   }
 
-  // ★★★ 4. 角球预期修复（增强版 - 利用 key_data 补充缺失数据）★★★
+  // ★★★ 4. 角球预期修复 ★★★
   var league = ST.league;
   var home = getField('home');
   var away = getField('away');
   if (!r.corners) r.corners = {};
   
-  // 从数据库获取角球数据（已包含跨联赛回退）
   var cornerLookup = lookupCorners(league, home, away);
   var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
   var dbAway = cornerLookup && cornerLookup.away ? cornerLookup.away.avg : null;
   
-  // 从 key_data 中提取客队角球信息（AI 可能从搜索中获取）
   var kd = r.key_data || {};
   var aiAwayCorner = null;
   if (kd.away_corner_away) {
@@ -1147,31 +1153,26 @@ function validateAndFixScore(r, context) {
     if (matchHome) aiHomeCorner = parseFloat(matchHome[1]);
   }
   
-  // 计算最终应使用的总角球
   var finalTotal = null;
   
-  // 优先使用数据库双方数据
   if (dbHome !== null && dbAway !== null) {
     finalTotal = dbHome + dbAway;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
     r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
     r.corners.note = '数据库预期值（双方均在库）';
   } 
-  // 如果只有主队数据库，尝试用 AI 的客队数据补充
   else if (dbHome !== null && dbAway === null && aiAwayCorner !== null) {
     finalTotal = dbHome + aiAwayCorner;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
     r.corners.data_away = '（AI搜索）' + aiAwayCorner;
     r.corners.note = '主队数据库 + 客队AI估算';
   }
-  // 如果只有客队数据库，尝试用 AI 的主队数据补充
   else if (dbAway !== null && dbHome === null && aiHomeCorner !== null) {
     finalTotal = aiHomeCorner + dbAway;
     r.corners.data_home = '（AI搜索）' + aiHomeCorner;
     r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
     r.corners.note = '客队数据库 + 主队AI估算';
   }
-  // 如果数据库只有一方且无AI补充，则只使用数据库值
   else if (dbHome !== null && dbAway === null) {
     finalTotal = dbHome;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
@@ -1185,7 +1186,6 @@ function validateAndFixScore(r, context) {
     r.corners.note = '仅客队数据库值，主队无数据';
   }
   
-  // 如果有计算出的 finalTotal，且与 AI 的 exp_total 偏差超过 1 或 AI 为空，则覆盖
   if (finalTotal !== null) {
     var aiTotal = r.corners.exp_total;
     if (aiTotal === null || aiTotal === undefined || Math.abs(aiTotal - finalTotal) > 1) {
@@ -1198,22 +1198,18 @@ function validateAndFixScore(r, context) {
     }
   }
 
-  // ★★★ 5. 杯赛角球折扣（核心修复）★★★
-  // 联赛数据在杯赛中偏高，需要折扣系数 0.88
+  // ★★★ 5. 杯赛角球折扣 ★★★
   if (r.corners && r.corners.exp_total !== null && r.corners.exp_total !== undefined) {
     var isCupContext = (context === 'cup_leg1' || context === 'cup_leg2' || context === 'cup_ko');
-    // 额外检测：如果联赛名包含"杯"字也触发
     if (!isCupContext && ST.league) {
       var leagueName = ST.league || '';
       if (leagueName.indexOf('杯') >= 0 || leagueName.indexOf('会杯') >= 0 || leagueName.indexOf('冠') >= 0) {
         isCupContext = true;
       }
     }
-    
     if (isCupContext) {
       var originalCorner = r.corners.exp_total;
       var discountedCorner = Math.round(originalCorner * 0.88 * 10) / 10;
-      // 只记录明显的折扣变化（差值 > 0.3）
       if (Math.abs(originalCorner - discountedCorner) > 0.3) {
         r.corners.exp_total = discountedCorner;
         r.corners.note = (r.corners.note || '') + '（杯赛折扣×0.88）';
@@ -1225,7 +1221,7 @@ function validateAndFixScore(r, context) {
     }
   }
 
-  // 6. 修正 markets 中的赔率与 odds_snapshot 不一致（特别是平局）
+  // 6. 修正 markets 中的赔率与 odds_snapshot 不一致
   if (r.markets && r.odds_snapshot && r.odds_snapshot.draw) {
     r.markets = r.markets.map(function(mk){
       if (mk.s && (mk.s.indexOf('平局') >= 0 || mk.s.indexOf('Draw') >= 0 || mk.s === 'draw' || mk.s === '平')) {
@@ -1288,7 +1284,7 @@ function getRecommendationLevel(main, threshold) {
 }
 
 // =====================================================================
-// 分析主流程（含缓存、角球跳过、双引擎、后处理校验）
+// 分析主流程
 // =====================================================================
 async function analyze(){
   var dsKey = document.getElementById('ds-key-inp').value.trim();
@@ -1471,7 +1467,7 @@ async function analyze(){
     statusEl.textContent = '🧠 分析中（DeepSeek Pro）…约30-90秒';
     var r = await runAnalysis(params, dsKey);
     
-    // ---- ★ 核心后处理校验（传入 context 用于杯赛折扣） ----
+    // ---- ★ 核心后处理校验 ----
     r = validateAndFixScore(r, params.context);
     
     ST.result = r;
@@ -1547,7 +1543,7 @@ function autoAddVerify(r, home, away){
 }
 
 // =====================================================================
-// 渲染结果（含修正提示、概率不足、市场隐含、角球补全）
+// 渲染结果
 // =====================================================================
 function renderResults(snapData){
   var r = ST.result; if(!r) return;
@@ -1653,7 +1649,7 @@ function renderResults(snapData){
   if(r.news) h += '<div style="font-size:11.5px;color:#54678C;margin-top:8px">📋 '+esc(r.news)+'</div>';
   h += '</div>';
 
-  // ---- AI概率判断（含市场隐含对比） ----
+  // ---- AI概率判断 ----
   h += '<div class="card"><div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em;margin-bottom:10px">AI概率判断</div>';
   h += '<div style="display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid #1E2A44">';
   [[pr.home,'#6FA8F5','主胜'],[pr.draw,'#54678C','平'],[pr.away,'#C084FC','客胜']].forEach(function(s){
@@ -1661,7 +1657,6 @@ function renderResults(snapData){
   });
   h += '</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#54678C;margin-top:4px">主胜 '+pct(pr.home)+' / 平 '+pct(pr.draw)+' / 客胜 '+pct(pr.away)+'</div>';
   
-  // 增加市场隐含概率对比
   var snapOdds = r.odds_snapshot || {};
   var impliedHome = (snapOdds.home && snapOdds.home > 1) ? (1 / snapOdds.home * 100).toFixed(1) + '%' : '—';
   var impliedDraw = (snapOdds.draw && snapOdds.draw > 1) ? (1 / snapOdds.draw * 100).toFixed(1) + '%' : '—';
@@ -1683,7 +1678,6 @@ function renderResults(snapData){
     if(cn.data_away) h += '<div style="font-size:11px;color:#8CA0C0;margin-bottom:6px">✈️ '+esc(cn.data_away)+'</div>';
     if(cn.suggestion) h += '<div style="padding:8px 10px;background:#F5B84114;border:1px solid #F5B84155;border-radius:8px;font-size:12.5px;color:#F5B841;font-weight:700">💡 '+esc(cn.suggestion)+'</div>';
     if(cn.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">📝 '+esc(cn.note)+'</div>';
-    // 如果有角球盘口但未生成markets，可以在这里显示简短提示
     var hasCornerMarketInMarkets = markets.some(function(mk){ return mk.m && mk.m.indexOf('角球') >= 0; });
     if (!hasCornerMarketInMarkets && cn.exp_total !== null) {
       h += '<div style="font-size:10.5px;color:#F87171;margin-top:4px">⚠️ 未检测到角球盘口，建议手动核对盘口列表，可能存在价值</div>';
@@ -1717,7 +1711,6 @@ function renderResults(snapData){
     var value = rec.value || [];
     var signalAlert = rec.signal_alert || null;
 
-    // 强制 Edge 同步（从markets中取）
     if (main.dir && markets.length > 0) {
       var mainMarket = null;
       for (var mi = 0; mi < markets.length; mi++) {
