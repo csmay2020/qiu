@@ -1083,19 +1083,16 @@ function validateAndFixScore(r, context) {
   var scoreParts = r.predicted_score ? r.predicted_score.split('-').map(function(s){ return parseInt(s.trim()); }) : null;
   if (scoreParts && scoreParts.length === 2 && !isNaN(scoreParts[0]) && !isNaN(scoreParts[1])) {
     var totalGoals = scoreParts[0] + scoreParts[1];
-    var over25 = r.goals && r.goals.over25 !== null && r.goals.over25 !== undefined ? r.goals.over25 : 0.5;
-    if (totalGoals >= 3 && over25 < 0.5) {
-      var correctedOver25 = Math.round(0.58 * 100) / 100;
-      console.log('[校验] 比分 ' + r.predicted_score + ' 总进球 ' + totalGoals + ' 与 over25 ' + (over25 * 100).toFixed(0) + '% 矛盾，修正为 ' + (correctedOver25 * 100).toFixed(0) + '%');
-      r.goals.over25 = correctedOver25;
+    if (!r.goals) r.goals = {};
+    // 只要有比分，就强制修正 over25，不再依赖 AI 原有的值
+    if (totalGoals >= 3) {
+      r.goals.over25 = 0.58;
       fixed = true;
-      fixMessages.push('大2.5概率已从 ' + (over25 * 100).toFixed(0) + '% 修正为 ' + (correctedOver25 * 100).toFixed(0) + '%（与比分 ' + r.predicted_score + ' 保持一致）');
-    } else if (totalGoals <= 2 && over25 >= 0.5) {
-      var correctedOver25Small = Math.round(0.38 * 100) / 100;
-      console.log('[校验] 比分 ' + r.predicted_score + ' 总进球 ' + totalGoals + ' 与 over25 ' + (over25 * 100).toFixed(0) + '% 矛盾，修正为 ' + (correctedOver25Small * 100).toFixed(0) + '%');
-      r.goals.over25 = correctedOver25Small;
+      fixMessages.push('大2.5概率已修正为 58%（与比分 ' + r.predicted_score + ' 保持一致）');
+    } else if (totalGoals <= 2) {
+      r.goals.over25 = 0.38;
       fixed = true;
-      fixMessages.push('大2.5概率已从 ' + (over25 * 100).toFixed(0) + '% 修正为 ' + (correctedOver25Small * 100).toFixed(0) + '%（与比分 ' + r.predicted_score + ' 保持一致）');
+      fixMessages.push('大2.5概率已修正为 38%（与比分 ' + r.predicted_score + ' 保持一致）');
     }
   }
 
@@ -1109,7 +1106,7 @@ function validateAndFixScore(r, context) {
     fixMessages.push('比分已从 ' + scoreDir + ' 修正为 ' + maxDir);
   }
 
-  // 2. 校验预期总进球与大2.5概率一致性
+  // 2. 校验预期总进球与大2.5概率一致性（但不要覆盖比分校验的结果）
   var expTotal = r.goals && r.goals.exp_total != null ? r.goals.exp_total : null;
   var over25 = r.goals && r.goals.over25 != null ? r.goals.over25 : null;
   if (expTotal !== null && over25 !== null && expTotal > 0) {
