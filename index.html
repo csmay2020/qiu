@@ -50,7 +50,7 @@ select option{background:#121B2E}
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#F5B84118,transparent 60%);pointer-events:none"></div>
   <div style="font-size:10px;letter-spacing:.35em;color:#F5B841">VALUE TERMINAL · 动机扭曲版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
-  <div style="font-size:10.5px;color:#54678C">动机扭曲案例库 · 快照量化联动</div>
+  <div style="font-size:10.5px;color:#54678C">动机扭曲案例库 · 快照量化联动 · 实时节奏修正</div>
 </div>
 
 <!-- API Key面板 -->
@@ -100,6 +100,11 @@ select option{background:#121B2E}
       <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">iOS OCR Server 地址</label>
       <input id="ios-url-inp" class="inp" value="http://10.0.1.11:8000" style="font-size:12px;padding:6px 10px;width:100%">
     </div>
+    <div style="margin-bottom:6px">
+      <label style="font-size:11px;color:#54678C;display:block;margin-bottom:2px">当前账户资金（单位）</label>
+      <input id="bankroll-input" class="inp" value="37" style="font-size:12px;padding:6px 10px;width:100%">
+      <div style="font-size:10px;color:#6FA8F5;margin-top:2px">用于凯利公式计算建议注码</div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-s" id="key-show">显示Keys</button>
       <button class="btn-s red" id="key-clear">清除Keys</button>
@@ -131,6 +136,19 @@ select option{background:#121B2E}
     <div class="g2">
       <input class="inp" id="inp-kickoff" placeholder="开赛时间（可选）">
       <select class="inp" id="inp-ctx"></select>
+    </div>
+    <!-- 实时修正输入（手动触发） -->
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #1E2A44;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:10.5px;color:#54678C">⏱️ 实时修正（分钟/角球/事件）:</span>
+      <input id="live-minute" class="inp" style="width:50px;padding:4px 6px;font-size:12px" placeholder="min">
+      <input id="live-corners" class="inp" style="width:50px;padding:4px 6px;font-size:12px" placeholder="角">
+      <select id="live-event" style="background:#0E1626;border:1px solid #1E2A44;color:#E6EDF7;border-radius:6px;padding:4px 6px;font-size:12px">
+        <option value="">无事件</option>
+        <option value="red">🟥 红牌</option>
+        <option value="penalty">⚽ 点球</option>
+      </select>
+      <button class="btn-s small" id="apply-live-btn">应用修正</button>
+      <span id="live-feedback" style="font-size:10.5px;color:#6FA8F5"></span>
     </div>
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #1E2A44;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button id="snapshot-clear-btn" class="btn-s red small" style="display:none">🗑️ 清除快照</button>
@@ -171,8 +189,10 @@ select option{background:#121B2E}
 
 <div id="tab-verify" style="display:none">
 <div class="wrap">
-  <div class="sec">预测准确率总览</div>
-  <div id="verify-stats" class="stats-grid"></div>
+  <div class="sec">预测准确率总览（AI预测）</div>
+  <div id="verify-stats-ai" class="stats-grid"></div>
+  <div class="sec">预测准确率总览（系统推荐）</div>
+  <div id="verify-stats-sys" class="stats-grid"></div>
   <div class="sec">置信度-准确率关系</div>
   <div id="conf-accuracy" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px"></div>
   <div class="sec">验证记录</div>
@@ -273,17 +293,14 @@ var TEAM_NAME_MAP = {
   "图库曼竞技": "Atlético Tucumán",
   "河床": "River Plate",
   "博卡青年": "Boca Juniors",
-  // 西班牙球队（保留原名，但若联赛为阿甲则不匹配）
   "科尔多瓦CF": "Córdoba CF",
-  "科尔多瓦": "Córdoba CF" // 注意：若上下文为阿甲，此映射会被覆盖
+  "科尔多瓦": "Córdoba CF"
 };
 
 function normalizeTeamName(name, league) {
   if (!name) return name;
   var trimmed = name.trim();
-  // 如果联赛是阿甲，优先匹配阿根廷球队，避免与西班牙混淆
   if (league && (league === '阿根廷甲' || league === '阿根廷杯')) {
-    // 尝试先匹配阿甲特定名称
     var argMap = {
       "中央科尔多瓦": "Central Cordoba SdE",
       "科尔多瓦中央": "Central Cordoba SdE",
@@ -440,7 +457,6 @@ function lookupCorners(league, home, away) {
   } else if (!foundHome && foundAway) {
     return { home: null, away: foundAway, total: foundAway.avg };
   }
-
   return null;
 }
 
@@ -603,7 +619,8 @@ var ST = {
   log: [],
   verify: [],
   oddsMode: 'img',
-  images: []
+  images: [],
+  currentBankroll: parseFloat(localStorage.getItem('bankroll')) || 37
 };
 
 // ── 工具 ──
@@ -770,7 +787,7 @@ async function recognizeImageWithOCR(base64Image) {
 }
 
 // =====================================================================
-// UnSearch + Tavily 搜索
+// UnSearch + Tavily 搜索（UnSearch部分保留但暂不强制）
 // =====================================================================
 async function unsearchSearch(query, apiKey) {
   if (!apiKey) return null;
@@ -1169,106 +1186,55 @@ function parseCornerOddsFromText(text) {
   if (!text) return null;
   var lines = text.split('\n');
   var cornerLines = [];
+  var insideCorner = false;
+  var tableRegex = /\|\s*Over\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*Under\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|/i;
+  var overRegex = /Over\s*([\d.]+)\s*([\d.]+)/i;
+  var underRegex = /Under\s*([\d.]+)\s*([\d.]+)/i;
   
-  // 多模式匹配，按优先级尝试
-  var patterns = [
-    // 表格格式: | Over 9.5 | 1.58 | Under 9.5 | 2.18 |
-    { regex: /\|\s*Over\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*Under\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|/i, groups: [1,2,3,4] },
-    // 中文格式: 角球 大 9.5 @1.85 小 @1.95
-    { regex: /角球\s*大\s*([\d.]+)\s*[@赔]\s*([\d.]+)\s*小\s*[@赔]\s*([\d.]+)/i, groups: [1,2,3] },
-    // 中文格式: 角球盘 9.5 大1.85 小1.95
-    { regex: /角球盘?\s*([\d.]+)\s*大\s*([\d.]+)\s*小\s*([\d.]+)/i, groups: [1,2,3] },
-    // 英文格式: Over 9.5 1.85 Under 9.5 1.95
-    { regex: /Over\s*([\d.]+)\s*([\d.]+)\s*Under\s*([\d.]+)\s*([\d.]+)/i, groups: [1,2,3,4] },
-    // 英文格式: Over 9.5 @1.85 Under 9.5 @1.95
-    { regex: /Over\s*([\d.]+)\s*@\s*([\d.]+)\s*Under\s*([\d.]+)\s*@\s*([\d.]+)/i, groups: [1,2,3,4] },
-    // 混合: 9.5 角球 大1.85 小1.95
-    { regex: /([\d.]+)\s*角球\s*大\s*([\d.]+)\s*小\s*([\d.]+)/i, groups: [1,2,3] },
-    // 单独 Over/Under 行（同一行内）
-    { regex: /Over\s*([\d.]+)\s*([\d.]+).*?Under\s*([\d.]+)\s*([\d.]+)/i, groups: [1,2,3,4] },
-  ];
-
-  // 先尝试按行匹配，再尝试全文匹配
-  var fullText = text.replace(/\s+/g, ' ');
-  for (var pi = 0; pi < patterns.length; pi++) {
-    var p = patterns[pi];
-    var match = fullText.match(p.regex);
-    if (match) {
-      var groups = p.groups;
-      var g1 = parseFloat(match[groups[0]]);
-      var g2 = parseFloat(match[groups[1]]);
-      var g3 = parseFloat(match[groups[2]]);
-      var g4 = groups[3] ? parseFloat(match[groups[3]]) : null;
-      
-      // 判断 line 和 odds
-      var line, overOdds, underOdds;
-      if (groups.length === 4) {
-        // 表格/四段格式: Over line odds1 Under line odds2
-        if (g1 === g3) {
-          line = g1;
-          overOdds = g2;
-          underOdds = g4;
-        } else {
-          // 可能顺序不同，尝试交换
-          if (Math.abs(g1 - g3) < 0.1) { line = g1; overOdds = g2; underOdds = g4; }
-          else continue;
-        }
-      } else if (groups.length === 3) {
-        // 三段格式: line, overOdds, underOdds
-        line = g1;
-        overOdds = g2;
-        underOdds = g3;
-      } else {
-        continue;
-      }
-      
-      if (!isNaN(line) && !isNaN(overOdds) && !isNaN(underOdds) && overOdds > 1 && underOdds > 1) {
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line.match(/TOTAL CORNERS|角球总数|Corners/i)) {
+      insideCorner = true;
+      continue;
+    }
+    if (!insideCorner) continue;
+    var tableMatch = line.match(tableRegex);
+    if (tableMatch) {
+      var lineVal = parseFloat(tableMatch[1]);
+      var overOdds = parseFloat(tableMatch[2]);
+      var underLine = parseFloat(tableMatch[3]);
+      var underOdds = parseFloat(tableMatch[4]);
+      if (!isNaN(lineVal) && !isNaN(overOdds) && !isNaN(underLine) && !isNaN(underOdds) && lineVal === underLine) {
         cornerLines.push({
-          line: line,
+          line: lineVal,
           overOdds: overOdds,
           underOdds: underOdds,
           impliedProb: 1 / overOdds
         });
-        console.log('[角球解析] 匹配到盘口: Over ' + line + ' @' + overOdds + ' / Under @' + underOdds);
-        // 找到第一个就跳出，避免重复
-        break;
+        continue;
       }
     }
-  }
-
-  // 如果仍然没有，尝试逐行扫描（兼容跨行情况）
-  if (cornerLines.length === 0) {
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i];
-      // 尝试匹配 Over/Under 在同一行
-      var m = line.match(/Over\s*([\d.]+)\s*([\d.]+)\s*Under\s*([\d.]+)\s*([\d.]+)/i);
-      if (m) {
-        var lineVal = parseFloat(m[1]);
-        var overOdds = parseFloat(m[2]);
-        var underLine = parseFloat(m[3]);
-        var underOdds = parseFloat(m[4]);
-        if (!isNaN(lineVal) && !isNaN(overOdds) && !isNaN(underLine) && !isNaN(underOdds) && Math.abs(lineVal - underLine) < 0.1) {
-          cornerLines.push({ line: lineVal, overOdds: overOdds, underOdds: underOdds, impliedProb: 1 / overOdds });
-          console.log('[角球解析] 逐行匹配到:', line);
-          break;
-        }
-      }
-      // 中文格式
-      var m2 = line.match(/角球\s*大\s*([\d.]+)\s*[@赔]\s*([\d.]+)\s*小\s*[@赔]\s*([\d.]+)/i);
-      if (m2) {
-        var lineVal2 = parseFloat(m2[1]);
-        var overOdds2 = parseFloat(m2[2]);
-        var underOdds2 = parseFloat(m2[3]);
-        if (!isNaN(lineVal2) && !isNaN(overOdds2) && !isNaN(underOdds2)) {
-          cornerLines.push({ line: lineVal2, overOdds: overOdds2, underOdds: underOdds2, impliedProb: 1 / overOdds2 });
-          console.log('[角球解析] 逐行匹配到中文:', line);
-          break;
-        }
+    var overMatch = line.match(overRegex);
+    var underMatch = line.match(underRegex);
+    if (overMatch && underMatch) {
+      var line1 = parseFloat(overMatch[1]);
+      var odds1 = parseFloat(overMatch[2]);
+      var line2 = parseFloat(underMatch[1]);
+      var odds2 = parseFloat(underMatch[2]);
+      if (!isNaN(line1) && !isNaN(odds1) && !isNaN(line2) && !isNaN(odds2) && line1 === line2) {
+        cornerLines.push({
+          line: line1,
+          overOdds: odds1,
+          underOdds: odds2,
+          impliedProb: 1 / odds1
+        });
+        continue;
       }
     }
+    if (line.match(/Hide list|More Bets/i)) {
+      insideCorner = false;
+    }
   }
-
-  // 去重（按 line）
   var seen = {};
   var result = [];
   cornerLines.forEach(function(c){
@@ -1277,17 +1243,9 @@ function parseCornerOddsFromText(text) {
       result.push(c);
     }
   });
-
-  if (result.length > 0) {
-    console.log('[角球解析] 最终解析结果:', result);
-  } else {
-    console.warn('[角球解析] 未能从OCR文本中解析出角球盘口，请检查OCR文本是否包含角球信息。');
-    // 输出前300个字符供调试
-    console.log('[角球解析] OCR预览:', text.slice(0, 300));
-  }
-
   return result.length > 0 ? result : null;
 }
+
 function estimateOverProbability(expected, line) {
   var z = (line - expected) / 2.5;
   var probUnder = 0.5 * (1 + erf(z / Math.sqrt(2)));
@@ -1435,7 +1393,7 @@ function validateAndFixScore(r, context) {
 
   var fixed = false;
   var fixMessages = [];
-  var scoreBasedOver25Fixed = false; // ★ 新增标志
+  var scoreBasedOver25Fixed = false;
 
   // ---- 0. 比分与大小球一致性 ----
   var scoreObj = r.predicted_score;
@@ -1446,12 +1404,12 @@ function validateAndFixScore(r, context) {
     if (!r.goals) r.goals = {};
     if (totalGoals >= 3) {
       r.goals.over25 = 0.58;
-      scoreBasedOver25Fixed = true; // ★ 标记已修正
+      scoreBasedOver25Fixed = true;
       fixed = true;
       fixMessages.push('大2.5概率已修正为 58%（与比分 ' + scoreStr + ' 保持一致）');
     } else if (totalGoals <= 2) {
       r.goals.over25 = 0.38;
-      scoreBasedOver25Fixed = true; // ★ 标记已修正
+      scoreBasedOver25Fixed = true;
       fixed = true;
       fixMessages.push('大2.5概率已修正为 38%（与比分 ' + scoreStr + ' 保持一致）');
     }
@@ -1470,13 +1428,6 @@ function validateAndFixScore(r, context) {
     }
     fixed = true;
     fixMessages.push('比分已从 ' + scoreDir + ' 修正为 ' + maxDir);
-    // ★ 如果比分被修正，重新执行第0段逻辑（但这里简单起见，可以重新触发一次，但为简化，我们跳过）
-    // 因为方向修正通常不影响总进球，但为了安全，我们强制再次检查一致性（但会重复，我们可忽略）
-    // 更好的做法：如果比分被修正，重新计算总进球，但这里简洁处理，信任新比分
-    // 但如果比分修正后总进球变化，应重新调整 over25，但这里我们设置标志让第2段覆盖？
-    // 实际上第2段会基于 exp_total 修正，可能再次覆盖，所以最好再检查一次。
-    // 但由于我们已经标记 scoreBasedOver25Fixed，第2段会跳过，所以需要重新根据新比分设置 over25。
-    // 所以我们重新根据新比分设置 over25：
     var newScoreParts = newScore.split('-').map(function(s){ return parseInt(s.trim()); });
     if (newScoreParts && newScoreParts.length === 2) {
       var newTotal = newScoreParts[0] + newScoreParts[1];
@@ -1491,10 +1442,10 @@ function validateAndFixScore(r, context) {
     }
   }
 
-  // 2. 预期总进球与大2.5一致性（★ 增加检查，如果已根据比分修正则跳过）
+  // 2. 预期总进球与大2.5一致性（跳过已根据比分修正的情况）
   var expTotal = r.goals && r.goals.exp_total != null ? r.goals.exp_total : null;
   var over25 = r.goals && r.goals.over25 != null ? r.goals.over25 : null;
-  if (expTotal !== null && over25 !== null && expTotal > 0 && !scoreBasedOver25Fixed) { // ★ 添加 !scoreBasedOver25Fixed
+  if (expTotal !== null && over25 !== null && expTotal > 0 && !scoreBasedOver25Fixed) {
     var expectedRange = getOver25Range(expTotal);
     if (over25 < expectedRange.min - 0.10 || over25 > expectedRange.max + 0.10) {
       var correctedOver25 = Math.round((expectedRange.min + expectedRange.max) / 2 * 100) / 100;
@@ -1513,7 +1464,7 @@ function validateAndFixScore(r, context) {
     r._max_prob_value = maxProb;
   }
 
-  // 4. 角球预期修复 + 动态折扣（保持不变）
+  // 4. 角球预期修复 + 动态折扣
   var league = ST.league;
   var home = getField('home');
   var away = getField('away');
@@ -1667,31 +1618,6 @@ function validateAndFixScore(r, context) {
 }
 
 // =====================================================================
-// 强制补全缺失盘口 (Handicap / Correct Score / Double Chance)
-// =====================================================================
-function ensureAllMarkets(r, ocrText) {
-  if (!r) return r;
-  if (!r.markets) r.markets = [];
-  var existingTypes = r.markets.map(function(m) { return m.m; });
-
-  var required = [
-    { type: 'handicap', label: '让球盘' },
-    { type: 'correct_score', label: '正确比分' },
-    { type: 'double_chance', label: '双胜彩' }
-  ];
-
-  required.forEach(function(req) {
-    if (!existingTypes.some(function(t) { return t.indexOf(req.type) >= 0 || t.indexOf(req.label) >= 0; })) {
-      var fallback = generateFallbackMarket(req.type, r, ocrText);
-      if (fallback) {
-        r.markets.push(fallback);
-      }
-    }
-  });
-  return r;
-}
-
-// =====================================================================
 // 多级推荐判断
 // =====================================================================
 function getRecommendationLevel(main, threshold) {
@@ -1715,26 +1641,105 @@ function getRecommendationLevel(main, threshold) {
   return { level: 'none', label: '⏸️ 观望', color: '#54678C' };
 }
 
-function generateFallbackMarket(type, r, ocrText) {
-  var probs = r.probs || {};
-  if (type === 'handicap') {
-    var homeProb = probs.home || 0.4;
-    var edge = homeProb - 0.5;
-    return { m: '让球盘 -0.5', s: '主队-0.5', odds: 1.9, p: homeProb, edge: edge, note: '推算值' };
-  }
-  if (type === 'correct_score') {
-    if (r.scores && r.scores.length) {
-      var top = r.scores[0];
-      var implied = 1 / 6.0;
-      return { m: '正确比分', s: top.score, odds: 6.0, p: top.prob, edge: top.prob - implied, note: '最可能比分' };
+// =====================================================================
+// ★★★ 实时节奏修正器（前15分钟锚点 + 红牌/点球冲击）★★★
+// =====================================================================
+function applyLiveAdjustments(originalPrediction, liveMinute, liveCorners, events) {
+    if (!originalPrediction) return null;
+    // 深拷贝
+    var adjusted = JSON.parse(JSON.stringify(originalPrediction));
+    var expTotal = adjusted.corners?.exp_total;
+    if (!expTotal || liveMinute < 10) return adjusted; // 10分钟内数据太噪，不修正
+
+    // 1. 节奏偏离度计算
+    var expectedRate = expTotal / 90;
+    var actualRate = liveCorners / liveMinute;
+    var deviation = (actualRate - expectedRate) / expectedRate;
+
+    var adjustFactor = 1.0;
+    var note = '';
+
+    if (liveMinute <= 25 && Math.abs(deviation) > 0.25) {
+        if (deviation < -0.25) {
+            adjustFactor = 0.85;
+            note = '⚠️ 开局节奏极慢，角球预期下调15%';
+        } else if (deviation > 0.35) {
+            adjustFactor = 1.12;
+            note = '⚡ 开局节奏极快，角球预期上调12%';
+        }
     }
-  }
-  if (type === 'double_chance') {
-    var homeDraw = (probs.home || 0) + (probs.draw || 0);
-    var implied = 1 / 1.3;
-    return { m: '双胜彩', s: '1X（主队不败）', odds: 1.3, p: homeDraw, edge: homeDraw - implied, note: '推算值' };
-  }
-  return null;
+
+    // 2. 事件冲击系数
+    if (events) {
+        if (events.redCard) {
+            var redFactor = 0.80;
+            if (adjusted.corners) adjusted.corners.exp_total = Math.round((adjusted.corners.exp_total || 0) * redFactor * 10) / 10;
+            if (adjusted.goals) adjusted.goals.exp_total = Math.round((adjusted.goals.exp_total || 0) * 0.85 * 10) / 10;
+            note += (note ? '；' : '') + '🟥 红牌事件：角球&进球预期下调20%';
+        }
+        if (events.penalty) {
+            var penFactor = 0.90;
+            if (adjusted.corners) adjusted.corners.exp_total = Math.round((adjusted.corners.exp_total || 0) * penFactor * 10) / 10;
+            note += (note ? '；' : '') + '⚽ 点球事件：节奏打断，角球预期下调10%';
+        }
+    }
+
+    if (adjustFactor !== 1.0 && adjusted.corners) {
+        adjusted.corners.exp_total = Math.round((adjusted.corners.exp_total || 0) * adjustFactor * 10) / 10;
+        adjusted.corners.note = (adjusted.corners.note || '') + '（' + note + '）';
+        adjusted._live_adjusted = true;
+        adjusted._adjust_note = note;
+    }
+
+    return adjusted;
+}
+
+// =====================================================================
+// ★★★ 凯利公式注码计算器（半凯利）★★★
+// =====================================================================
+function calculateKellyStake(edge, odds, bankroll) {
+    if (!edge || edge <= 0 || !odds || odds <= 1) return { stake: 0, ratio: '0%' };
+    
+    var b = odds - 1;
+    var p = 1 / odds + edge;
+    var q = 1 - p;
+    
+    var f = (b * p - q) / b;
+    var halfKelly = f * 0.5;
+    var maxStakeRatio = Math.min(halfKelly, 0.05);
+    if (maxStakeRatio < 0.01) maxStakeRatio = 0;
+    
+    var stakeAmount = Math.round((bankroll * maxStakeRatio) * 10) / 10;
+    return {
+        stake: stakeAmount,
+        ratio: (maxStakeRatio * 100).toFixed(1) + '%',
+        kelly: (f * 100).toFixed(1) + '%'
+    };
+}
+
+// =====================================================================
+// 强制补全缺失盘口 (Handicap / Correct Score / Double Chance)
+// =====================================================================
+function ensureAllMarkets(r, ocrText) {
+  if (!r) return r;
+  if (!r.markets) r.markets = [];
+  var existingTypes = r.markets.map(function(m) { return m.m; });
+
+  var required = [
+    { type: 'handicap', label: '让球盘' },
+    { type: 'correct_score', label: '正确比分' },
+    { type: 'double_chance', label: '双胜彩' }
+  ];
+
+  required.forEach(function(req) {
+    if (!existingTypes.some(function(t) { return t.indexOf(req.type) >= 0 || t.indexOf(req.label) >= 0; })) {
+      var fallback = generateFallbackMarket(req.type, r, ocrText);
+      if (fallback) {
+        r.markets.push(fallback);
+      }
+    }
+  });
+  return r;
 }
 
 function generateFallbackMarket(type, r, ocrText) {
@@ -1779,6 +1784,12 @@ async function analyze(){
   localStorage.setItem('unsearch_key', unsearchKey);
   ST.tavilyKey = tavilyKey;
   localStorage.setItem('tavily_key', tavilyKey);
+  // 更新银行余额
+  var bankrollInput = document.getElementById('bankroll-input');
+  if (bankrollInput) {
+    ST.currentBankroll = parseFloat(bankrollInput.value) || 37;
+    localStorage.setItem('bankroll', ST.currentBankroll);
+  }
 
   if(!dsKey){ alert('请先填入DeepSeek API Key'); return; }
   if(!unsearchKey && !tavilyKey){ alert('请至少填入 UnSearch 或 Tavily API Key'); return; }
@@ -1979,18 +1990,27 @@ async function analyze(){
   }
 }
 
-// ── 自动记入验证（含置信度） ──
+// ── 自动记入验证（含置信度，拆分AI与系统推荐） ──
 function autoAddVerify(r, home, away){
   if(!r) return;
   var pr = r.probs || {};
   var pred_1x2 = pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
+  var sys_rec = r.rec?.main?.dir || null;
+  // 将系统推荐映射为home/draw/away（取第一个单词或简单判断）
+  var sys_1x2 = null;
+  if (sys_rec) {
+    if (sys_rec.indexOf('主') >= 0 || sys_rec.toLowerCase().indexOf('home') >= 0) sys_1x2 = 'home';
+    else if (sys_rec.indexOf('平') >= 0 || sys_rec.toLowerCase().indexOf('draw') >= 0) sys_1x2 = 'draw';
+    else if (sys_rec.indexOf('客') >= 0 || sys_rec.toLowerCase().indexOf('away') >= 0) sys_1x2 = 'away';
+  }
   var conf = calculateConfidence(r, home, away, ST.league, ST.context);
   var entry = {
     id: Date.now(),
     date: new Date().toISOString().slice(0,10),
     league: ST.league,
     match: home + ' vs ' + away,
-    pred_1x2: pred_1x2,
+    ai_pred_1x2: pred_1x2,
+    sys_rec_1x2: sys_1x2,
     pred_score: (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : ''),
     pred_over25: r.goals && r.goals.over25 >= 0.5 ? 'over' : 'under',
     pred_corners_total: r.corners && r.corners.exp_total != null ? r.corners.exp_total : null,
@@ -1998,11 +2018,12 @@ function autoAddVerify(r, home, away){
     actual_corners: null,
     actual_1x2: null,
     actual_over25: null,
-    correct_1x2: null,
+    correct_ai_1x2: null,
+    correct_sys_1x2: null,
     correct_score: null,
     correct_over25: null,
     correct_corners: null,
-    conf_score: conf.score  // 存储置信度评分
+    conf_score: conf.score
   };
   var existingIdx = -1;
   for(var i=0;i<ST.verify.length;i++){
@@ -2014,7 +2035,8 @@ function autoAddVerify(r, home, away){
   if(existingIdx >= 0){
     ST.verify[existingIdx] = {
       ...ST.verify[existingIdx],
-      pred_1x2: entry.pred_1x2,
+      ai_pred_1x2: entry.ai_pred_1x2,
+      sys_rec_1x2: entry.sys_rec_1x2,
       pred_score: entry.pred_score,
       pred_over25: entry.pred_over25,
       pred_corners_total: entry.pred_corners_total,
@@ -2131,7 +2153,6 @@ function renderResults(snapData){
   h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">';
   h += '<div><span style="color:#54678C">胜平负</span><br><b style="color:' + (r._prob_insufficient ? '#FB923C' : '#E6EDF7') + '">' + predDisplayLabel + '</b></div>';
   
-  // ---- 比分概率分布显示 ----
   if (r.scores && r.scores.length) {
     var scoreHtml = r.scores.map(function(s) {
       return '<span style="margin-right:12px">' + s.score + ' <span style="color:#8CA0C0">' + pct(s.prob) + '</span></span>';
@@ -2192,7 +2213,9 @@ function renderResults(snapData){
     if(cn.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">📝 '+esc(cn.note)+'</div>';
     var hasCornerMarketInMarkets = markets.some(function(mk){ return mk.m && mk.m.indexOf('角球') >= 0; });
     if (!hasCornerMarketInMarkets && cn.exp_total !== null) {
-      h += '<div style="font-size:10.5px;color:#F87171;margin-top:4px">⚠️ 未检测到角球盘口，建议手动核对盘口列表，可能存在价值</div>';
+      h += '<div style="font-size:10.5px;color:#6FA8F5;margin-top:4px">';
+      h += 'ℹ️ 注：未在AI扫描中匹配到角球盘口。建议手动核对截图顶部是否有 <b>“Total Corners”</b> 列表，若有但未显示，请尝试重新上传清晰截图。';
+      h += '</div>';
     }
     h += '</div>';
   }
@@ -2292,8 +2315,19 @@ function renderResults(snapData){
       h += '<span>胜率 <b style="color:#E6EDF7">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
       h += '<span>Edge <b style="color:#34D399">'+mainEdge+'</b></span>';
       if(rec.stake) h += '<span>注码 <b style="color:#E6EDF7">'+esc(rec.stake)+'</b></span>';
+      // 凯利公式
+      var kelly = calculateKellyStake(main.edge, main.odds, ST.currentBankroll);
+      if (kelly.stake > 0) {
+        h += '<div style="font-size:11px;color:#34D399;margin-top:4px">💰 建议注码：' + kelly.stake + ' 单位（占资金 ' + kelly.ratio + '，半凯利）</div>';
+      }
       h += '</div>';
       if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
+      // 第三球防御
+      if (main.dir && main.dir.indexOf('Under 2.5') !== -1) {
+        h += '<div style="margin-top:8px;padding:6px 10px;background:#1E2A4455;border-radius:6px;font-size:11px;color:#8CA0C0">';
+        h += '🛡️ 防御策略：若担心被第三球绝杀，可同步轻仓 <b style="color:#F5B841">小3.5</b>（赔率若≥1.80），对冲“刚好3球”的风险。';
+        h += '</div>';
+      }
       h += '</div>';
     } else if (recLevel.level === 'light') {
       var mainEdge2 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
@@ -2381,6 +2415,22 @@ function renderResults(snapData){
   area.innerHTML = h;
   area.style.display = '';
   var rb = document.getElementById('rec-btn'); if(rb) rb.addEventListener('click', recordBet);
+
+  // 应用实时修正（如果用户输入了分钟和角球数）
+  var liveMinute = document.getElementById('live-minute');
+  var liveCorners = document.getElementById('live-corners');
+  if (liveMinute && liveCorners && liveMinute.value && liveCorners.value) {
+    var events = {};
+    var eventSelect = document.getElementById('live-event');
+    if (eventSelect) {
+      if (eventSelect.value === 'red') events.redCard = true;
+      if (eventSelect.value === 'penalty') events.penalty = true;
+    }
+    var adjusted = applyLiveAdjustments(r, parseInt(liveMinute.value), parseInt(liveCorners.value), events);
+    if (adjusted) {
+      document.getElementById('live-feedback').textContent = '✅ 修正已应用：角球预期 ' + adjusted.corners.exp_total + '，' + (adjusted._adjust_note || '');
+    }
+  }
 }
 
 // ── 投注日志 ──
@@ -2418,7 +2468,8 @@ function saveActual(id, score, corners){
 
   ST.verify = ST.verify.map(function(v){
     if(v.id !== id) return v;
-    var correct_1x2 = (actual_1x2 && v.pred_1x2 === actual_1x2) ? true : (actual_1x2 ? false : null);
+    var correct_ai_1x2 = (actual_1x2 && v.ai_pred_1x2 === actual_1x2) ? true : (actual_1x2 ? false : null);
+    var correct_sys_1x2 = (actual_1x2 && v.sys_rec_1x2 === actual_1x2) ? true : (actual_1x2 ? false : null);
     var correct_score = (score && v.pred_score === score) ? true : (score ? false : null);
     var correct_over25 = (actual_over25 && v.pred_over25 === actual_over25) ? true : (actual_over25 ? false : null);
     var correct_corners = null;
@@ -2431,7 +2482,8 @@ function saveActual(id, score, corners){
       actual_corners: isNaN(actual_corners_val) ? null : actual_corners_val,
       actual_1x2: actual_1x2,
       actual_over25: actual_over25,
-      correct_1x2: correct_1x2,
+      correct_ai_1x2: correct_ai_1x2,
+      correct_sys_1x2: correct_sys_1x2,
       correct_score: correct_score,
       correct_over25: correct_over25,
       correct_corners: correct_corners
@@ -2456,7 +2508,8 @@ function resetVerify(id){
       actual_corners: null,
       actual_1x2: null,
       actual_over25: null,
-      correct_1x2: null,
+      correct_ai_1x2: null,
+      correct_sys_1x2: null,
       correct_score: null,
       correct_over25: null,
       correct_corners: null
@@ -2468,28 +2521,34 @@ function resetVerify(id){
 
 function refreshVerify(){
   var area = document.getElementById('verify-area');
-  var statsArea = document.getElementById('verify-stats');
+  var statsAi = document.getElementById('verify-stats-ai');
+  var statsSys = document.getElementById('verify-stats-sys');
   var confArea = document.getElementById('conf-accuracy');
   if(!area) return;
 
   var settled = ST.verify.filter(function(v){ return v.actual_1x2 !== null || v.actual_score !== null; });
-  var stats = { c1x2: 0, t1x2: 0, cscore: 0, tscore: 0, co25: 0, to25: 0, ccorners: 0, tcorners: 0 };
+  
+  // AI 统计
+  var aiStats = { c1x2: 0, t1x2: 0, cscore: 0, tscore: 0, co25: 0, to25: 0, ccorners: 0, tcorners: 0 };
+  // 系统推荐统计
+  var sysStats = { c1x2: 0, t1x2: 0 };
 
   settled.forEach(function(v){
-    if(v.correct_1x2 !== null){ stats.t1x2++; if(v.correct_1x2) stats.c1x2++; }
-    if(v.correct_score !== null){ stats.tscore++; if(v.correct_score) stats.cscore++; }
-    if(v.correct_over25 !== null){ stats.to25++; if(v.correct_over25) stats.co25++; }
-    if(v.correct_corners !== null){ stats.tcorners++; if(v.correct_corners) stats.ccorners++; }
+    if(v.correct_ai_1x2 !== null){ aiStats.t1x2++; if(v.correct_ai_1x2) aiStats.c1x2++; }
+    if(v.correct_sys_1x2 !== null){ sysStats.t1x2++; if(v.correct_sys_1x2) sysStats.c1x2++; }
+    if(v.correct_score !== null){ aiStats.tscore++; if(v.correct_score) aiStats.cscore++; }
+    if(v.correct_over25 !== null){ aiStats.to25++; if(v.correct_over25) aiStats.co25++; }
+    if(v.correct_corners !== null){ aiStats.tcorners++; if(v.correct_corners) aiStats.ccorners++; }
   });
 
   var statCards = [
-    { label: '胜平负', hit: stats.c1x2, total: stats.t1x2 },
-    { label: '大小球2.5', hit: stats.co25, total: stats.to25 },
-    { label: '角球±1.5', hit: stats.ccorners, total: stats.tcorners }
+    { label: '胜平负', hit: aiStats.c1x2, total: aiStats.t1x2 },
+    { label: '大小球2.5', hit: aiStats.co25, total: aiStats.to25 },
+    { label: '角球±1.5', hit: aiStats.ccorners, total: aiStats.tcorners }
   ];
 
-  if(statsArea){
-    statsArea.innerHTML = '';
+  if(statsAi){
+    statsAi.innerHTML = '';
     statCards.forEach(function(card){
       var rate = card.total > 0 ? Math.round(card.hit / card.total * 100) : null;
       var div = document.createElement('div');
@@ -2498,17 +2557,29 @@ function refreshVerify(){
       div.innerHTML = '<div class="num" style="color:' + color + '">' + (rate !== null ? rate + '%' : '—') + '</div>' +
         '<div class="label">' + card.label + '</div>' +
         '<div class="sub">' + card.hit + '/' + card.total + '场</div>';
-      statsArea.appendChild(div);
+      statsAi.appendChild(div);
     });
   }
 
-  // ---- 置信度-准确率关系 ----
+  if(statsSys){
+    statsSys.innerHTML = '';
+    var sysRate = sysStats.t1x2 > 0 ? Math.round(sysStats.c1x2 / sysStats.t1x2 * 100) : null;
+    var div = document.createElement('div');
+    div.className = 'stat-card';
+    var color = sysRate !== null ? (sysRate >= 55 ? '#34D399' : (sysRate >= 40 ? '#F5B841' : '#F87171')) : '#54678C';
+    div.innerHTML = '<div class="num" style="color:' + color + '">' + (sysRate !== null ? sysRate + '%' : '—') + '</div>' +
+      '<div class="label">胜平负（系统推荐）</div>' +
+      '<div class="sub">' + sysStats.c1x2 + '/' + sysStats.t1x2 + '场</div>';
+    statsSys.appendChild(div);
+  }
+
+  // 置信度-准确率关系（使用AI预测胜平负）
   var confBins = { high: {range:'高(80+)', correct:0, total:0}, medium: {range:'中(60-79)', correct:0, total:0}, low: {range:'中低(40-59)', correct:0, total:0}, veryLow: {range:'低(<40)', correct:0, total:0} };
   settled.forEach(function(v){
     var score = v.conf_score !== undefined ? v.conf_score : 50;
     var bin = score >= 80 ? 'high' : (score >= 60 ? 'medium' : (score >= 40 ? 'low' : 'veryLow'));
     confBins[bin].total++;
-    if (v.correct_1x2) confBins[bin].correct++;
+    if (v.correct_ai_1x2) confBins[bin].correct++;
   });
   if(confArea){
     confArea.innerHTML = '';
@@ -2533,7 +2604,8 @@ function refreshVerify(){
   var h = '';
   ST.verify.forEach(function(v){
     var hasActual = v.actual_score !== null;
-    var predLabel = { home: '主胜', draw: '平局', away: '客胜' }[v.pred_1x2] || v.pred_1x2;
+    var aiLabel = { home: '主胜', draw: '平局', away: '客胜' }[v.ai_pred_1x2] || v.ai_pred_1x2;
+    var sysLabel = v.sys_rec_1x2 ? ({ home: '主胜', draw: '平局', away: '客胜' }[v.sys_rec_1x2] || v.sys_rec_1x2) : '无推荐';
     var predOverLabel = v.pred_over25 === 'over' ? '大2.5' : '小2.5';
     var predCorners = v.pred_corners_total !== null ? v.pred_corners_total.toFixed(1) : '?';
 
@@ -2547,7 +2619,8 @@ function refreshVerify(){
     h += '<div style="background:#0E1626;border-radius:8px;padding:10px;margin-bottom:8px">';
     h += '<div style="font-size:10px;color:#54678C;font-weight:700;margin-bottom:4px">📌 AI预测</div>';
     h += '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11.5px">';
-    h += '<span style="color:#6FA8F5">胜平负: <b>' + predLabel + '</b></span>';
+    h += '<span style="color:#6FA8F5">AI胜平负: <b>' + aiLabel + '</b></span>';
+    h += '<span style="color:#34D399">系统推荐: <b>' + sysLabel + '</b></span>';
     if(v.pred_score) h += '<span style="color:#F5B841">比分: <b>' + esc(v.pred_score) + '</b></span>';
     h += '<span style="color:#8CA0C0">进球: <b>' + predOverLabel + '</b></span>';
     h += '<span style="color:#C084FC">角球预期: <b>' + predCorners + '</b></span>';
@@ -2564,21 +2637,25 @@ function refreshVerify(){
       h += '<div style="background:#0E1626;border-radius:8px;padding:10px">';
       h += '<div style="font-size:14px;font-weight:700;color:#E6EDF7;margin-bottom:4px">实际: ' + esc(v.actual_score) + (v.actual_corners !== null ? ' · ' + v.actual_corners + '角球' : '') + '</div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-      if(v.correct_1x2 !== null){
-        var c1 = v.correct_1x2 ? '#34D399' : '#F87171';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c1 + '55;background:' + c1 + '14;color:' + c1 + ';font-size:11px;font-weight:700">' + (v.correct_1x2 ? '✓' : '✗') + ' 胜平负</span>';
+      if(v.correct_ai_1x2 !== null){
+        var c1 = v.correct_ai_1x2 ? '#34D399' : '#F87171';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c1 + '55;background:' + c1 + '14;color:' + c1 + ';font-size:11px;font-weight:700">' + (v.correct_ai_1x2 ? '✓' : '✗') + ' AI-胜平负</span>';
+      }
+      if(v.correct_sys_1x2 !== null){
+        var c2 = v.correct_sys_1x2 ? '#34D399' : '#F87171';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c2 + '55;background:' + c2 + '14;color:' + c2 + ';font-size:11px;font-weight:700">' + (v.correct_sys_1x2 ? '✓' : '✗') + ' 系统-胜平负</span>';
       }
       if(v.correct_over25 !== null){
-        var c2 = v.correct_over25 ? '#34D399' : '#F87171';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c2 + '55;background:' + c2 + '14;color:' + c2 + ';font-size:11px;font-weight:700">' + (v.correct_over25 ? '✓' : '✗') + ' 大小球</span>';
+        var c3 = v.correct_over25 ? '#34D399' : '#F87171';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c3 + '55;background:' + c3 + '14;color:' + c3 + ';font-size:11px;font-weight:700">' + (v.correct_over25 ? '✓' : '✗') + ' 大小球</span>';
       }
       if(v.correct_corners !== null){
-        var c3 = v.correct_corners ? '#34D399' : '#F87171';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c3 + '55;background:' + c3 + '14;color:' + c3 + ';font-size:11px;font-weight:700">' + (v.correct_corners ? '✓' : '✗') + ' 角球</span>';
+        var c4 = v.correct_corners ? '#34D399' : '#F87171';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c4 + '55;background:' + c4 + '14;color:' + c4 + ';font-size:11px;font-weight:700">' + (v.correct_corners ? '✓' : '✗') + ' 角球</span>';
       }
       if(v.correct_score !== null){
-        var c4 = v.correct_score ? '#34D399' : '#F87171';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c4 + '55;background:' + c4 + '14;color:' + c4 + ';font-size:11px;font-weight:700">' + (v.correct_score ? '✓' : '✗') + ' 比分</span>';
+        var c5 = v.correct_score ? '#34D399' : '#F87171';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c5 + '55;background:' + c5 + '14;color:' + c5 + ';font-size:11px;font-weight:700">' + (v.correct_score ? '✓' : '✗') + ' 比分</span>';
       }
       h += '</div></div>';
       h += '<button class="btn-s small" style="margin-top:6px" data-vreset="' + v.id + '">重新填写</button>';
@@ -2642,13 +2719,15 @@ function init(){
   var ocrspaceKey = localStorage.getItem('ocrspace_key') || '';
   var iosUrl = localStorage.getItem('ios_url') || 'http://10.0.1.11:8000';
   var engine = localStorage.getItem('ocr_engine') || 'ios';
+  var bankroll = parseFloat(localStorage.getItem('bankroll')) || 37;
 
   document.getElementById('ds-key-inp').value = dsKey;
   document.getElementById('unsearch-key-inp').value = unsearchKey;
   document.getElementById('tavily-key-inp').value = tavilyKey;
   document.getElementById('ocrspace-key-inp').value = ocrspaceKey;
   document.getElementById('ios-url-inp').value = iosUrl;
-  ST.dsKey = dsKey; ST.unsearchKey = unsearchKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine;
+  document.getElementById('bankroll-input').value = bankroll;
+  ST.dsKey = dsKey; ST.unsearchKey = unsearchKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine; ST.currentBankroll = bankroll;
   updateKeyUI();
 
   var radios = document.querySelectorAll('input[name="ocrEngine"]');
@@ -2744,6 +2823,11 @@ function init(){
     localStorage.setItem('ios_url', this.value);
     ST.iosUrl = this.value;
   });
+  document.getElementById('bankroll-input').addEventListener('input', function(){
+    var val = parseFloat(this.value) || 37;
+    localStorage.setItem('bankroll', val);
+    ST.currentBankroll = val;
+  });
 
   document.getElementById('snapshot-clear-btn').addEventListener('click', function(){
     var home = getField('home'), away = getField('away');
@@ -2760,6 +2844,34 @@ function init(){
   });
   document.getElementById('inp-away').addEventListener('input', function(){
     updateSnapshotUI(ST.league, getField('home'), getField('away'));
+  });
+
+  // 实时修正按钮
+  document.getElementById('apply-live-btn').addEventListener('click', function(){
+    var min = parseInt(document.getElementById('live-minute').value);
+    var corners = parseInt(document.getElementById('live-corners').value);
+    if (!min || !corners) {
+      alert('请输入分钟数和当前角球数');
+      return;
+    }
+    var events = {};
+    var eventSelect = document.getElementById('live-event');
+    if (eventSelect) {
+      if (eventSelect.value === 'red') events.redCard = true;
+      if (eventSelect.value === 'penalty') events.penalty = true;
+    }
+    if (ST.result) {
+      var adjusted = applyLiveAdjustments(ST.result, min, corners, events);
+      if (adjusted) {
+        // 显示在结果区域顶部（或者浮窗）
+        document.getElementById('live-feedback').textContent = '✅ 修正已应用：角球预期 ' + adjusted.corners.exp_total + '，' + (adjusted._adjust_note || '');
+        // 也可以重新渲染结果（但为了不覆盖原始分析，只作提示）
+      } else {
+        document.getElementById('live-feedback').textContent = '⚠️ 修正失败，请检查数据';
+      }
+    } else {
+      alert('请先完成比赛分析，再应用实时修正');
+    }
   });
 
   document.addEventListener('click', function(e){
