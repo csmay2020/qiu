@@ -128,7 +128,7 @@ select option{background:#121B2E}
 <div class="wrap">
   <div class="sec">01 · 比赛</div>
   <div class="card">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span id="league-row"></span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="league-row"></div>
     <div class="g2" style="margin-bottom:8px">
       <input class="inp" id="inp-home" placeholder="主队（支持中文名）">
       <input class="inp" id="inp-away" placeholder="客队（支持中文名）">
@@ -182,6 +182,8 @@ select option{background:#121B2E}
   </div>
 
   <div id="results-area" style="display:none;margin-top:8px"></div>
+  <div id="pace-analysis-result" style="display:none;margin-top:8px;padding:10px;background:#0E1626;border-radius:8px;border:1px solid #1E2A44;font-size:12px;color:#8CA0C0"></div>
+
 </div>
 </div>
 
@@ -211,92 +213,265 @@ select option{background:#121B2E}
 // 中文→英文 队名映射（含消歧义扩充）
 // =====================================================================
 var TEAM_NAME_MAP = {
+  // ===== 英超 =====
+  "曼城": "Manchester City",
+  "阿森纳": "Arsenal",
+  "利物浦": "Liverpool",
+  "切尔西": "Chelsea",
+  "曼联": "Manchester United",
+  "热刺": "Tottenham",
+  "纽卡斯尔": "Newcastle",
+  "纽卡斯尔联": "Newcastle",
+  "阿斯顿维拉": "Aston Villa",
+  "西汉姆": "West Ham",
+  "西汉姆联": "West Ham",
+  "布莱顿": "Brighton",
+  "富勒姆": "Fulham",
+  "布伦特福德": "Brentford",
+  "狼队": "Wolves",
+  "埃弗顿": "Everton",
+  "水晶宫": "Crystal Palace",
+  "诺丁汉森林": "Nottingham Forest",
+  "伯恩茅斯": "Bournemouth",
+  "莱斯特城": "Leicester",
+  "莱斯特": "Leicester",
+  "伊普斯维奇": "Ipswich",
+  "南安普顿": "Southampton",
+
+  // ===== 西甲 =====
+  "皇家马德里": "Real Madrid",
+  "皇马": "Real Madrid",
+  "巴塞罗那": "Barcelona",
+  "巴萨": "Barcelona",
+  "马德里竞技": "Atletico Madrid",
+  "马竞": "Atletico Madrid",
+  "毕尔巴鄂": "Athletic Bilbao",
+  "毕尔巴鄂竞技": "Athletic Bilbao",
+  "比利亚雷亚尔": "Villarreal",
+  "皇家社会": "Real Sociedad",
+  "贝蒂斯": "Betis",
+  "皇家贝蒂斯": "Betis",
+  "瓦伦西亚": "Valencia",
+  "塞维利亚": "Sevilla",
+  "赫罗纳": "Girona",
+  "塞尔塔": "Celta Vigo",
+  "巴列卡诺": "Rayo Vallecano",
+  "奥萨苏纳": "Osasuna",
+  "马略卡": "Mallorca",
+  "赫塔菲": "Getafe",
+  "阿拉维斯": "Deportivo Alaves",
+  "西班牙人": "Espanyol",
+  "拉斯帕尔马斯": "Las Palmas",
+  "莱加内斯": "Leganes",
+  "巴拉多利德": "Valladolid",
+
+  // ===== 意甲 =====
+  "国际米兰": "Inter Milan",
+  "国米": "Inter Milan",
+  "尤文图斯": "Juventus",
+  "AC米兰": "AC Milan",
+  "米兰": "AC Milan",
+  "那不勒斯": "Napoli",
+  "亚特兰大": "Atalanta",
+  "罗马": "Roma",
+  "拉齐奥": "Lazio",
+  "佛罗伦萨": "Fiorentina",
+  "都灵": "Torino",
+  "博洛尼亚": "Bologna",
+  "乌迪内斯": "Udinese",
+  "热那亚": "Genoa",
+  "卡利亚里": "Cagliari",
+  "维罗纳": "Verona",
+  "莱切": "Lecce",
+  "科莫": "Como",
+  "帕尔马": "Parma",
+  "恩波利": "Empoli",
+  "威尼斯": "Venezia",
+  "蒙扎": "Monza",
+
+  // ===== 德甲 =====
+  "拜仁慕尼黑": "Bayern Munich",
+  "拜仁": "Bayern Munich",
+  "勒沃库森": "Bayer Leverkusen",
+  "多特蒙德": "Borussia Dortmund",
+  "多特": "Borussia Dortmund",
+  "莱比锡": "RB Leipzig",
+  "法兰克福": "Eintracht Frankfurt",
+  "门兴": "Borussia Monchengladbach",
+  "门兴格拉德巴赫": "Borussia Monchengladbach",
+  "弗赖堡": "Freiburg",
+  "霍芬海姆": "Hoffenheim",
+  "不莱梅": "Werder Bremen",
+  "云达不莱梅": "Werder Bremen",
+  "奥格斯堡": "Augsburg",
+  "沃尔夫斯堡": "Wolfsburg",
+  "美因茨": "Mainz",
+  "斯图加特": "Stuttgart",
+  "柏林联合": "Union Berlin",
+  "海登海姆": "Heidenheim",
+  "圣保利": "St. Pauli",
+  "荷尔斯泰因基尔": "Holstein Kiel",
+  "波鸿": "Bochum",
+
+  // ===== 法甲 =====
+  "巴黎圣日耳曼": "Paris Saint-Germain",
+  "大巴黎": "Paris Saint-Germain",
+  "摩纳哥": "Monaco",
+  "马赛": "Marseille",
+  "里尔": "Lille",
+  "里昂": "Lyon",
+  "尼斯": "Nice",
+  "朗斯": "Lens",
+  "雷恩": "Rennes",
+  "斯特拉斯堡": "Strasbourg",
+  "南特": "Nantes",
+  "图卢兹": "Toulouse",
+  "布雷斯特": "Brest",
+  "蒙彼利埃": "Montpellier",
+  "兰斯": "Reims",
+  "勒阿弗尔": "Le Havre",
+  "圣埃蒂安": "Saint-Etienne",
+  "昂热": "Angers",
+  "欧塞尔": "Auxerre",
+
+  // ===== MLS（完整版）=====
+  "圣何塞地震": "SJ Earthquakes",
+  "圣路易斯城": "St. Louis City",
+  "费城联合": "Philadelphia Union",
+  "迈阿密国际": "Inter Miami",
+  "纽约红牛": "New York RB",
+  "洛杉矶FC": "Los Angeles FC",
+  "温哥华白浪": "Vancouver Whitecaps",
+  "温哥华白帽": "Vancouver Whitecaps",
+  "多伦多": "Toronto",
+  "明尼苏达联": "Minnesota United",
+  "洛杉矶银河": "LA Galaxy",
+  "CF蒙特利尔": "CF Montreal",
+  "蒙特利尔": "CF Montreal",
+  "波特兰伐木工": "Portland Timbers",
+  "西雅图海湾人": "Seattle Sounders",
+  "科罗拉多急流": "Colorado Rapids",
+  "哥伦布机员": "Columbus Crew",
+  "华盛顿联": "DC United",
+  "亚特兰大联": "Atlanta United",
+  "辛辛那提": "Cincinnati",
+  "圣迭戈": "San Diego",
+  "皇家盐湖城": "Real Salt Lake",
+  "芝加哥火焰": "Chicago Fire",
+  "夏洛特": "Charlotte",
+  "纳什维尔": "Nashville SC",
+  "达拉斯": "Dallas",
+  "休斯顿迪纳摩": "Houston Dynamo",
+  "奥斯汀": "Austin",
+  "新英格兰革命": "New England",
+  "奥兰多城": "Orlando City",
+  "堪萨斯城": "Sporting KC",
+  "纽约城": "New York City",
+
+  // ===== 瑞典甲 =====
+  "尤尔加登": "Djurgården",
+  "哈马比": "Hammarby",
+  "哥德堡": "IFK Göteborg",
+  "赫根": "Häcken",
+  "天狼星": "Sirius",
+  "盖斯": "GAIS",
+  "卡尔马": "Kalmar",
+  "米亚尔比": "Mjällby",
+  "马尔默": "Malmö FF",
+  "代格福什": "Degerfors",
+  "布洛马波卡纳": "Brommapojkarna",
+  "韦斯特罗斯": "Västerås SK",
+  "厄尔格里特": "Örgryte",
+  "埃尔夫斯堡": "Elfsborg",
+  "哈尔姆斯塔德": "Halmstad",
+
+  // ===== 挪超 =====
+  "博德闪耀": "Bodø/Glimt",
+  "瓦勒伦加": "Vålerenga",
+  "布兰": "Brann",
+  "维京": "Viking",
+  "罗森博格": "Rosenborg",
+  "桑讷菲尤尔": "Sandefjord",
+  "特罗姆瑟": "Tromsø",
+  "莫尔德": "Molde",
+  "利勒斯特罗姆": "Lillestrøm",
+  "奥勒松": "Aalesund",
+  "萨普斯堡": "Sarpsborg 08",
+  "腓特烈斯塔": "Fredrikstad",
+  "克里斯蒂安松": "Kristiansund",
+  "汉坎": "HamKam",
+  "斯塔特": "Start",
+
+  // ===== 阿根廷甲 =====
+  "河床": "River Plate",
+  "阿根廷青年人": "Argentinos Juniors",
+  "独立": "Independiente",
+  "独立队": "Independiente",
+  "博卡青年": "Boca Juniors",
+  "博卡": "Boca Juniors",
+  "科尔多瓦学院": "Instituto",
+  "圣菲联合": "Unión Santa Fe",
+  "科尔多瓦塔莱雷斯": "Talleres Córdoba",
+  "图库曼竞技": "Atlético Tucumán",
+  "里瓦达维亚独立": "Independiente Rivadavia",
+  "里奥夸尔托大学生": "Estudiantes de Río Cuarto",
+  "罗萨里奥中央": "Rosario Central",
+  "普拉滕斯": "Platense",
+  "防卫者": "Defensa y Justicia",
+  "萨斯菲尔德": "Vélez Sarsfield",
+  "拉普拉塔大学生": "Estudiantes",
+  "竞技": "Racing Club",
+  "竞技队": "Racing Club",
+  "里斯特拉": "Deportivo Riestra",
+  "老虎": "Tigre",
+  "拉努斯": "Lanús",
+  "拉普拉塔体操": "Gimnasia La Plata",
+  "阿尔多西维": "Aldosivi",
+  "飓风": "Huracán",
+  "圣洛伦索": "San Lorenzo",
+  "门多萨体操": "Gimnasia y Esgrima Mendoza",
+  "纽维尔老男孩": "Newell's Old Boys",
+  "萨尔米恩托": "Sarmiento",
+  "贝尔格拉诺": "Belgrano",
+  "班菲尔德": "Banfield",
+  "中央科尔多瓦": "Central Cordoba SdE",
+  "科尔多瓦中央": "Central Cordoba SdE",
+  "巴拉卡斯中央": "Barracas Central",
+
+  // ===== 墨甲 =====
+  "瓜达拉哈拉": "Guadalajara",
+  "美洲队": "América",
+  "老虎队": "Tigres UANL",
+  "桑托斯拉古纳": "Santos Laguna",
+  "莱昂": "León",
+  "蓝十字": "Cruz Azul",
+  "托卢卡": "Toluca",
+  "内卡萨": "Necaxa",
+  "克雷塔罗": "Querétaro",
+  "阿特拉斯": "Atlas",
+  "亚特兰特": "Atlante",
+  "圣路易斯": "Atlético San Luis",
+  "普埃布拉": "Puebla",
+  "帕丘卡": "Pachuca",
+  "国立自治大学": "Pumas UNAM",
+  "华雷斯": "Juárez",
+  "蒙特雷": "Monterrey",
+  "蒂华纳": "Tijuana",
+
+  // ===== 其他/欧洲 =====
   "塞萨洛尼基": "PAOK",
   "基辅迪纳摩": "Dynamo Kyiv",
   "波兹南": "Lech Poznań",
   "奥胡斯": "AGF Aarhus",
   "安德莱赫特": "Anderlecht",
-  "哈马比": "Hammarby IF",
   "中日德兰": "FC Midtjylland",
   "贝西克塔斯": "Beşiktaş JK",
-  "布兰": "Brann",
   "KF Ballkani": "KF Ballkani",
   "波希米亚人": "Bohemians Dublin",
   "克卢日大学": "Universitatea Cluj",
   "本菲卡": "Benfica",
-  "圣加伦": "St. Gallen",
-  "皇家马德里": "Real Madrid",
-  "巴塞罗那": "Barcelona",
-  "马德里竞技": "Atletico Madrid",
-  "拜仁慕尼黑": "Bayern Munich",
-  "多特蒙德": "Borussia Dortmund",
-  "勒沃库森": "Bayer Leverkusen",
-  "曼城": "Manchester City",
-  "利物浦": "Liverpool",
-  "阿森纳": "Arsenal",
-  "切尔西": "Chelsea",
-  "曼联": "Manchester United",
-  "热刺": "Tottenham",
-  "纽卡斯尔": "Newcastle",
-  "阿斯顿维拉": "Aston Villa",
-  "巴黎圣日耳曼": "Paris Saint-Germain",
-  "马赛": "Marseille",
-  "里昂": "Lyon",
-  "摩纳哥": "Monaco",
-  "国际米兰": "Inter Milan",
-  "AC米兰": "AC Milan",
-  "尤文图斯": "Juventus",
-  "那不勒斯": "Napoli",
-  "罗马": "Roma",
-  "亚特兰大": "Atalanta",
-  "博德闪耀": "Bodø/Glimt",
-  "莫尔德": "Molde",
-  "罗森博格": "Rosenborg",
-  "维京": "Viking",
-  "迈阿密国际": "Inter Miami",
-  "洛杉矶FC": "Los Angeles FC",
-  "洛杉矶银河": "LA Galaxy",
-  "西雅图海湾人": "Seattle Sounders",
-  "纽约红牛": "New York RB",
-  "纽约城": "New York City",
-  "奥兰多城": "Orlando City",
-  "多伦多": "Toronto",
-  "温哥华白浪": "Vancouver Whitecaps",
-  "新英格兰革命": "New England",
-  "费城联合": "Philadelphia Union",
-  "亚特兰大联": "Atlanta United",
-  "芝加哥火焰": "Chicago Fire",
-  "达拉斯": "Dallas",
-  "休斯顿迪纳摩": "Houston Dynamo",
-  "圣路易斯城": "St. Louis City",
-  "明尼苏达联": "Minnesota United",
-  "科罗拉多急流": "Colorado Rapids",
-  "皇家盐湖城": "Real Salt Lake",
-  "波特兰伐木工": "Portland Timbers",
-  "辛辛那提": "Cincinnati",
-  "纳什维尔": "Nashville SC",
-  "哥伦布机员": "Columbus Crew",
-  "华盛顿联": "DC United",
-  "圣何塞地震": "SJ Earthquakes",
-  "堪萨斯城": "Sporting KC",
-  "夏洛特": "Charlotte",
-  "奥斯汀": "Austin",
-  "圣迭戈": "San Diego",
-  "CF蒙特利尔": "CF Montreal",
-  // ---- 阿甲消歧义新增 ----
-  "中央科尔多瓦": "Central Cordoba SdE",
-  "Central Córdoba (SdE)": "Central Cordoba SdE",
-  "Central Córdoba SdE": "Central Cordoba SdE",
-  "科尔多瓦中央": "Central Cordoba SdE",
-  "独立队": "Independiente",
-  "纽维尔老男孩": "Newell's Old Boys",
-  "图库曼竞技": "Atlético Tucumán",
-  "河床": "River Plate",
-  "博卡青年": "Boca Juniors",
-  "科尔多瓦CF": "Córdoba CF",
-  "科尔多瓦": "Córdoba CF"
+  "圣加伦": "St. Gallen"
 };
-
 function normalizeTeamName(name, league) {
   if (!name) return name;
   var trimmed = name.trim();
@@ -317,34 +492,136 @@ function normalizeTeamName(name, league) {
 }
 
 // =====================================================================
-// ★★★ 角球数据库（含跨联赛回退查找功能）★★★
+// ★★★ 角球数据库（基于新基线数据，2026赛季实测）★★★
 // =====================================================================
+
 var CORNER_DB = {
+  // ===== MLS（新基线数据）=====
   "MLS":{
-    "Nashville SC":4.5,"Vancouver Whitecaps":5.33,"Inter Miami":6.13,
-    "SJ Earthquakes":7.06,"Chicago Fire":4.6,"Los Angeles FC":5.88,
-    "Dallas":4.38,"New England":3.93,"Cincinnati":4.5,
-    "Real Salt Lake":4.73,"Seattle Sounders":5.33,"New York City":3.44,
-    "Charlotte":4.75,"Houston Dynamo":4.4,"St. Louis City":5.94,
-    "New York RB":6.06,"Minnesota United":5.31,"DC United":4.56,
-    "Orlando City":3.88,"LA Galaxy":5.29,"Columbus Crew":5.25,
-    "Colorado Rapids":4.88,"Toronto":5.69,"Portland Timbers":4.56,
-    "CF Montreal":5.19,"San Diego":4.56,"Atlanta United":4.94,
-    "Austin":4.25,"Sporting KC":3.81,"Philadelphia Union":5.94
+    "SJ Earthquakes": {home:9.1, away:4.8, total:6.9},
+    "St. Louis City": {home:6.6, away:6.1, total:6.3},
+    "Philadelphia Union": {home:7.8, away:4.8, total:6.3},
+    "Inter Miami": {home:7.6, away:4.8, total:6.1},
+    "New York RB": {home:5.9, away:6.1, total:6.0},
+    "Los Angeles FC": {home:5.9, away:5.2, total:5.6},
+    "Vancouver Whitecaps": {home:6.9, away:3.9, total:5.5},
+    "Toronto": {home:6.3, away:4.6, total:5.4},
+    "Minnesota United": {home:5.6, away:5.3, total:5.4},
+    "LA Galaxy": {home:5.9, away:4.8, total:5.4},
+    "CF Montreal": {home:6.7, away:3.8, total:5.2},
+    "Portland Timbers": {home:4.8, away:5.3, total:5.1},
+    "Seattle Sounders": {home:5.9, away:4.5, total:5.1},
+    "Colorado Rapids": {home:6.4, away:3.9, total:5.0},
+    "Columbus Crew": {home:4.4, away:5.6, total:5.0},
+    "DC United": {home:6.2, away:3.7, total:4.9},
+    "Atlanta United": {home:4.6, away:5.0, total:4.8},
+    "Cincinnati": {home:5.0, away:4.6, total:4.8},
+    "San Diego": {home:5.5, away:3.9, total:4.8},
+    "Real Salt Lake": {home:4.3, away:5.1, total:4.7},
+    "Chicago Fire": {home:5.7, away:3.5, total:4.7},
+    "Charlotte": {home:5.6, away:3.4, total:4.6},
+    "Nashville SC": {home:4.8, away:4.3, total:4.6},
+    "Dallas": {home:4.3, away:4.6, total:4.4},
+    "Houston Dynamo": {home:4.6, away:4.0, total:4.3},
+    "Austin": {home:5.3, away:3.2, total:4.1},
+    "New England": {home:4.4, away:3.1, total:3.9},
+    "Orlando City": {home:3.1, away:4.3, total:3.8},
+    "Sporting KC": {home:3.7, away:3.4, total:3.6},
+    "New York City": {home:3.9, away:2.5, total:3.3}
   },
+  // ===== 瑞典甲（新基线数据）=====
   "瑞典甲":{
-    "Sirius":5.31,"Hammarby":5.57,"Häcken":5.62,"Västerås SK":4.5,
-    "AIK":6.15,"Djurgården":7.38,"Malmö FF":4.85,"GAIS":5.14,
-    "Elfsborg":3.86,"Mjällby":5.15,"Brommapojkarna":4.46,
-    "Kalmar":5.31,"IFK Göteborg":5.58,"Degerfors":4.57,
-    "Örgryte":4.08,"Halmstad":3.46
+    "Djurgården": {home:6.0, away:8.8, total:7.2},
+    "Hammarby": {home:6.3, away:5.6, total:5.9},
+    "AIK": {home:6.7, away:4.9, total:5.7},
+    "IFK Göteborg": {home:6.7, away:4.6, total:5.6},
+    "Häcken": {home:5.3, away:5.9, total:5.5},
+    "Sirius": {home:5.4, away:5.6, total:5.5},
+    "GAIS": {home:6.1, away:4.7, total:5.5},
+    "Kalmar": {home:6.3, away:4.0, total:5.2},
+    "Mjällby": {home:7.7, away:2.9, total:4.9},
+    "Malmö FF": {home:4.7, away:4.8, total:4.7},
+    "Degerfors": {home:4.9, away:4.6, total:4.7},
+    "Brommapojkarna": {home:4.0, away:4.5, total:4.3},
+    "Västerås SK": {home:4.3, away:4.3, total:4.3},
+    "Örgryte": {home:4.0, away:3.9, total:3.9},
+    "Elfsborg": {home:3.9, away:3.7, total:3.8},
+    "Halmstad": {home:3.0, away:4.0, total:3.5}
   },
+  // ===== 挪超（新基线数据）=====
   "挪超":{
-    "Bodø/Glimt":7.5,"Vålerenga":7.2,"Brann":6.4,"Viking":6.3,
-    "Sandefjord":6.0,"Rosenborg":5.6,"Tromsø":5.6,"Lillestrøm":5.1,
-    "Molde":5.0,"Sarpsborg 08":4.9,"Aalesund":4.5,"Kristiansund":4.3,
-    "Fredrikstad":4.2,"KFUM":4.2,"HamKam":4.0,"Start":3.4
+    "Bodø/Glimt": {home:9.6, away:5.5, total:7.6},
+    "Vålerenga": {home:8.0, away:5.6, total:6.9},
+    "Brann": {home:6.6, away:6.4, total:6.5},
+    "Viking": {home:6.2, away:6.7, total:6.5},
+    "Rosenborg": {home:7.5, away:5.0, total:6.3},
+    "Sandefjord": {home:6.0, away:5.4, total:5.7},
+    "Tromsø": {home:6.6, away:4.1, total:5.5},
+    "Molde": {home:4.4, away:6.3, total:5.3},
+    "Lillestrøm": {home:4.7, away:5.0, total:4.9},
+    "Aalesund": {home:5.7, away:3.5, total:4.8},
+    "Sarpsborg 08": {home:5.9, away:3.9, total:4.8},
+    "Fredrikstad": {home:5.1, away:3.5, total:4.3},
+    "Kristiansund": {home:3.6, away:4.6, total:4.1},
+    "KFUM": {home:4.7, away:3.0, total:4.0},
+    "HamKam": {home:3.4, away:4.3, total:3.9},
+    "Start": {home:4.7, away:2.9, total:3.7}
   },
+  // ===== 阿根廷甲（新基线数据）=====
+  "阿根廷甲":{
+    "River Plate": {home:6.8, away:4.4, total:5.9},
+    "Argentinos Juniors": {home:5.9, away:5.0, total:5.5},
+    "Independiente": {home:7.0, away:4.3, total:5.5},
+    "Boca Juniors": {home:6.5, away:4.2, total:5.3},
+    "Instituto": {home:4.3, away:5.8, total:5.1},
+    "Unión Santa Fe": {home:6.0, away:4.3, total:5.0},
+    "Talleres Córdoba": {home:6.7, away:3.4, total:4.8},
+    "Atlético Tucumán": {home:6.0, away:3.5, total:4.7},
+    "Independiente Rivadavia": {home:4.6, away:4.6, total:4.6},
+    "Estudiantes de Río Cuarto": {home:4.3, away:4.8, total:4.5},
+    "Rosario Central": {home:4.9, away:3.9, total:4.4},
+    "Platense": {home:4.9, away:3.8, total:4.4},
+    "Defensa y Justicia": {home:4.8, away:3.8, total:4.3},
+    "Vélez Sarsfield": {home:5.1, away:3.2, total:4.3},
+    "Estudiantes": {home:5.0, away:3.2, total:4.2},
+    "Racing Club": {home:4.6, away:3.9, total:4.2},
+    "Deportivo Riestra": {home:4.8, away:3.4, total:4.2},
+    "Tigre": {home:3.9, away:4.3, total:4.1},
+    "Lanús": {home:5.0, away:3.0, total:4.0},
+    "Gimnasia La Plata": {home:3.8, away:4.1, total:4.0},
+    "Aldosivi": {home:3.9, away:4.0, total:4.0},
+    "Huracán": {home:4.5, away:3.4, total:3.9},
+    "San Lorenzo": {home:4.9, away:3.0, total:3.9},
+    "Gimnasia y Esgrima Mendoza": {home:4.8, away:2.8, total:3.8},
+    "Newell's Old Boys": {home:4.7, away:2.6, total:3.7},
+    "Sarmiento": {home:4.9, away:2.3, total:3.7},
+    "Belgrano": {home:4.4, away:3.0, total:3.6},
+    "Banfield": {home:5.1, away:2.3, total:3.6},
+    "Central Cordoba SdE": {home:4.0, away:3.2, total:3.6},
+    "Barracas Central": {home:2.1, away:1.8, total:1.9}
+  },
+  // ===== 墨甲（赛季初期数据）=====
+  "墨甲":{
+    "Guadalajara": {home:14.0, away:7.0, total:11.7},
+    "América": {home:4.0, away:10.5, total:8.3},
+    "Tigres UANL": {home:9.0, away:7.5, total:8.0},
+    "Santos Laguna": {home:4.0, away:8.0, total:6.7},
+    "León": {home:4.5, away:10.0, total:6.3},
+    "Cruz Azul": {home:7.0, away:4.0, total:6.0},
+    "Toluca": {home:7.5, away:2.0, total:5.7},
+    "Necaxa": {home:7.5, away:2.0, total:5.7},
+    "Querétaro": {home:4.0, away:6.0, total:4.7},
+    "Atlas": {home:6.0, away:3.5, total:4.3},
+    "Atlante": {home:2.0, away:5.0, total:4.0},
+    "Atlético San Luis": {home:4.5, away:3.0, total:4.0},
+    "Puebla": {home:1.0, away:5.0, total:3.7},
+    "Pachuca": {home:1.0, away:5.0, total:3.7},
+    "Pumas UNAM": {home:9.0, away:0.5, total:3.3},
+    "Juárez": {home:3.5, away:2.0, total:3.0},
+    "Monterrey": {home:5.0, away:1.5, total:2.7},
+    "Tijuana": {home:2.0, away:1.0, total:1.7}
+  },
+  // ===== 以下五大联赛保持原样 =====
   "英超":{
     "Manchester City":6.2,"Arsenal":5.8,"Liverpool":5.6,
     "Chelsea":5.4,"Manchester United":5.2,"Tottenham":5.5,
@@ -387,20 +664,6 @@ var CORNER_DB = {
     "Nantes":4.7,"Toulouse":4.8,"Brest":4.9,
     "Montpellier":4.5,"Reims":4.6,"Le Havre":4.4,
     "Saint-Etienne":4.5,"Angers":4.3,"Auxerre":4.4
-  },
-  "阿根廷甲":{
-    "Argentinos Juniors":5.7,"River Plate":5.7,"Independiente":5.53,
-    "Boca Juniors":5.12,"Unión Santa Fe":5.05,"Instituto":5.0,
-    "Atlético Tucumán":4.75,"Talleres Córdoba":4.53,
-    "Independiente Rivadavia":4.47,"Platense":4.47,
-    "Estudiantes de Río Cuarto":4.44,"Estudiantes":4.41,
-    "Defensa y Justicia":4.29,"Tigre":4.31,"Deportivo Riestra":4.31,
-    "Rosario Central":4.35,"Vélez Sarsfield":4.22,"Racing Club":4.21,
-    "Gimnasia La Plata":4.0,"San Lorenzo":3.88,"Huracán":3.79,
-    "Aldosivi":3.76,"Belgrano":3.71,"Lanús":3.71,"Sarmiento":3.71,
-    "Central Cordoba SdE":3.65,"Banfield":3.53,
-    "Newell's Old Boys":3.44,"Gimnasia y Esgrima Mendoza":3.41,
-    "Barracas Central":2.0
   }
 };
 
@@ -412,15 +675,41 @@ function lookupCorners(league, home, away) {
   function findTeamInDb(db, name) {
     if (!name || !db) return null;
     var n = name.trim();
-    if (db[n] !== undefined) return { team: n, avg: db[n] };
+    // ★ 关键修复：先通过中文映射转成英文
+    var mappedName = normalizeTeamName(n);
+    if (mappedName !== n) {
+    n = mappedName;
+  }
+    // 新数据结构：{home, away, total}
+    if (db[n] && db[n].total !== undefined) {
+      return { team: n, avg: db[n].total, home: db[n].home, away: db[n].away };
+    }
+    // 兼容旧数据结构：直接存数字
+    if (db[n] !== undefined && typeof db[n] === 'number') {
+      return { team: n, avg: db[n], home: null, away: null };
+    }
     var lower = n.toLowerCase();
     var keys = Object.keys(db);
     for (var i = 0; i < keys.length; i++) {
-      if (keys[i].toLowerCase() === lower) return { team: keys[i], avg: db[keys[i]] };
+      if (keys[i].toLowerCase() === lower) {
+        var val = db[keys[i]];
+        if (val && val.total !== undefined) {
+          return { team: keys[i], avg: val.total, home: val.home, away: val.away };
+        }
+        if (typeof val === 'number') {
+          return { team: keys[i], avg: val, home: null, away: null };
+        }
+      }
     }
     for (var j = 0; j < keys.length; j++) {
       if (keys[j].toLowerCase().indexOf(lower) >= 0 || lower.indexOf(keys[j].toLowerCase()) >= 0) {
-        return { team: keys[j], avg: db[keys[j]] };
+        var val2 = db[keys[j]];
+        if (val2 && val2.total !== undefined) {
+          return { team: keys[j], avg: val2.total, home: val2.home, away: val2.away };
+        }
+        if (typeof val2 === 'number') {
+          return { team: keys[j], avg: val2, home: null, away: null };
+        }
       }
     }
     return null;
@@ -429,11 +718,15 @@ function lookupCorners(league, home, away) {
   if (db) {
     var h = findTeamInDb(db, homeNorm);
     var a = findTeamInDb(db, awayNorm);
-    if (h && a) return { home: h, away: a, total: h.avg + a.avg };
+    if (h && a) {
+      var total = h.avg + a.avg;
+      return { home: h, away: a, total: total };
+    }
     if (h && !a) return { home: h, away: null, total: h.avg };
     if (!h && a) return { home: null, away: a, total: a.avg };
   }
 
+  // 跨联赛回退查找
   var allLeagueKeys = Object.keys(CORNER_DB);
   var foundHome = null;
   var foundAway = null;
@@ -457,6 +750,7 @@ function lookupCorners(league, home, away) {
   } else if (!foundHome && foundAway) {
     return { home: null, away: foundAway, total: foundAway.avg };
   }
+
   return null;
 }
 
@@ -498,7 +792,11 @@ function getCornerDiscount(context, league, roundInfo) {
   return Math.min(Math.max(discount, 0.75), 1.15);
 }
 
+// =====================================================================
+// ★★★ 关键定义：LEAGUES 和 CTXS（必须在 init 之前定义）★★★
+// =====================================================================
 var LEAGUES = ["英超","西甲","意甲","德甲","法甲","欧冠","欧联杯","欧会杯","世界杯","MLS","墨甲","巴西甲","巴西乙","阿根廷甲","阿根廷杯","秘鲁甲","挪超","瑞典甲","瑞典乙","芬超","冰岛超","瑞超","其他"];
+
 var CTXS = [
   {v:'regular', l:'联赛常规轮次'},
   {v:'critical', l:'关键战(争冠/保级/欧战)'},
@@ -511,7 +809,9 @@ var CTXS = [
   {v:'group_last', l:'小组赛末轮'},
   {v:'dead', l:'无关痛痒'}
 ];
+
 var CTX_LABEL = {}; CTXS.forEach(function(c){ CTX_LABEL[c.v] = c.l; });
+
 var MIN_ODDS = 1.3;
 var LOG_KEY = 'vt_log_v4';
 var VERIFY_KEY = 'vt_verify_v4';
@@ -961,8 +1261,7 @@ function buildPrompt(params){
 
 触发后必须执行：
 - 主胜概率上限强制设为 55%（即使在 probs 中高于此值，也必须压缩）
-- 平局概率至少上调 5 个百分点
-- 客胜概率至少上调 3 个百分点
+- 平局概率至少上调 5 个百分点- 客胜概率至少上调 3 个百分点
 - 在主推卡中增加 ⚠️ 动机扭曲警告
 - over25 概率强制设为 ≤ 50%
 `;
@@ -1272,6 +1571,7 @@ function calculateConfidence(r, home, away, league, context) {
   var score = 0;
   var details = [];
 
+  // 1. 角球数据完整度（从25分降到18分）
   var cornerScore = 0;
   var kd = r.key_data || {};
   var cornerLookup = lookupCorners(league, home, away);
@@ -1283,17 +1583,18 @@ function calculateConfidence(r, home, away, league, context) {
   var hasAwayCorner = hasDbAway || hasAiAway;
   
   if (hasHomeCorner && hasAwayCorner) {
-    cornerScore = 25;
-    details.push('两队角球数据齐全（+25）');
+    cornerScore = 18;
+    details.push('两队角球数据齐全（+18）');
   } else if (hasHomeCorner || hasAwayCorner) {
-    cornerScore = 15;
-    details.push('仅一队有角球数据（+15）');
+    cornerScore = 10;
+    details.push('仅一队有角球数据（+10）');
   } else {
-    cornerScore = 5;
-    details.push('角球数据缺失（+5）');
+    cornerScore = 4;
+    details.push('角球数据缺失（+4）');
   }
   score += cornerScore;
 
+  // 2. 关键数据完整度（20分，不变）
   var dataFields = [
     kd.home_goals_home,
     kd.away_goals_away,
@@ -1313,6 +1614,7 @@ function calculateConfidence(r, home, away, league, context) {
     details.push('关键数据缺失（+5）');
   }
 
+  // 3. 队名匹配度（15分，不变）
   var nameScore = 0;
   if (TEAM_NAME_MAP[home]) nameScore += 7;
   if (TEAM_NAME_MAP[away]) nameScore += 8;
@@ -1323,22 +1625,24 @@ function calculateConfidence(r, home, away, league, context) {
   else if (nameScore >= 6) details.push('队名部分匹配（+'+Math.min(nameScore,15)+'）');
   else details.push('队名未匹配（+'+Math.min(nameScore,15)+'）');
 
+  // 4. AI概率集中度（从15分降到12分）
   var pr = r.probs || {};
   var maxP = Math.max(pr.home || 0, pr.draw || 0, pr.away || 0);
   if (maxP >= 0.55) {
-    score += 15;
-    details.push('概率集中度好（+15）');
+    score += 12;
+    details.push('概率集中度好（+12）');
   } else if (maxP >= 0.45) {
-    score += 10;
-    details.push('概率集中度一般（+10）');
+    score += 8;
+    details.push('概率集中度一般（+8）');
   } else if (maxP >= 0.35) {
-    score += 5;
-    details.push('概率分散（+5）');
+    score += 4;
+    details.push('概率分散（+4）');
   } else {
     score += 2;
     details.push('概率高度分散（+2）');
   }
 
+  // 5. 市场与AI一致性（从15分升到22分）
   var snap = r.odds_snapshot || {};
   var impliedHome = snap.home ? 1 / snap.home : null;
   var impliedDraw = snap.draw ? 1 / snap.draw : null;
@@ -1349,20 +1653,21 @@ function calculateConfidence(r, home, away, league, context) {
     var marketAll = [{d:'home',p:impliedHome},{d:'draw',p:impliedDraw},{d:'away',p:impliedAway}].sort(function(a,b){ return b.p - a.p; });
     var aiAll = [{d:'home',p:aiHome},{d:'draw',p:aiDraw},{d:'away',p:aiAway}].sort(function(a,b){ return b.p - a.p; });
     if (marketAll[0].d === aiAll[0].d) {
-      score += 15;
-      details.push('市场与AI方向一致（+15）');
+      score += 22;
+      details.push('市场与AI方向一致（+22）');
     } else if (marketAll[1].d === aiAll[0].d) {
-      score += 8;
-      details.push('市场与AI次高方向一致（+8）');
+      score += 12;
+      details.push('市场与AI次高方向一致（+12）');
     } else {
-      score += 3;
-      details.push('市场与AI方向分歧（+3）');
+      score += 5;
+      details.push('市场与AI方向分歧（+5）');
     }
   } else {
-    score += 7;
-    details.push('市场数据部分缺失（+7）');
+    score += 8;
+    details.push('市场数据部分缺失（+8）');
   }
 
+  // 6. 比赛情境（10分，不变）
   var isCup = (context === 'cup_leg1' || context === 'cup_leg2' || context === 'cup_ko');
   if (!isCup && league) {
     var leagueName = league || '';
@@ -1695,6 +2000,84 @@ function applyLiveAdjustments(originalPrediction, liveMinute, liveCorners, event
 }
 
 // =====================================================================
+// ★★★ 前15分钟节奏锚点分析（独立于修正器）★★★
+// =====================================================================
+function analyzeLivePace(originalPrediction, liveMinute, liveCorners) {
+    if (!originalPrediction) return null;
+    if (liveMinute < 10) {
+        return {
+            message: '⏳ 比赛刚开始（' + liveMinute + '分钟），样本不足，建议继续观察至15分钟后再做判断',
+            deviation: 0,
+            suggestion: '观望',
+            predictedTotal: originalPrediction.corners?.exp_total || null
+        };
+    }
+
+    var expTotal = originalPrediction.corners?.exp_total;
+    if (!expTotal) {
+        return {
+            message: '⚠️ 无角球预期数据，无法进行节奏分析',
+            deviation: 0,
+            suggestion: '观望',
+            predictedTotal: null
+        };
+    }
+
+    // 1. 计算预期节奏 vs 实际节奏
+    var expectedRate = expTotal / 90; // 预期每分钟角球数
+    var actualRate = liveCorners / liveMinute;
+    var deviation = ((actualRate - expectedRate) / expectedRate) * 100; // 百分比
+
+    var deviationAbs = Math.abs(deviation);
+    var direction = deviation > 0 ? '偏快' : '偏慢';
+    var suggestion = '';
+    var message = '';
+    var adjustedTotal = expTotal;
+
+    // 2. 根据偏离度给出建议
+    if (deviationAbs < 15) {
+        message = '✅ 节奏与赛前预期基本一致（偏离 ' + deviation.toFixed(0) + '%），无需调整';
+        suggestion = '按原计划执行';
+    } else if (deviation < -15 && deviationAbs <= 40) {
+        // 实际节奏比预期慢 15%-40%
+        var slowFactor = 1 - (deviationAbs / 100);
+        adjustedTotal = Math.round(expTotal * slowFactor * 10) / 10;
+        message = '⚠️ 实际节奏明显偏慢（偏离 ' + deviation.toFixed(0) + '%），赛前预期可能高估，建议下调角球预期至 ' + adjustedTotal.toFixed(1) + '角';
+        suggestion = '关注小角方向（Under 9.5/10.5）';
+    } else if (deviation > 15 && deviationAbs <= 40) {
+        // 实际节奏比预期快 15%-40%
+        var fastFactor = 1 + (deviationAbs / 100);
+        adjustedTotal = Math.round(expTotal * fastFactor * 10) / 10;
+        message = '⚡ 实际节奏明显偏快（偏离 ' + deviation.toFixed(0) + '%），赛前预期可能低估，建议上调角球预期至 ' + adjustedTotal.toFixed(1) + '角';
+        suggestion = '关注大角方向（Over 9.5/10.5）';
+    } else if (deviationAbs > 40) {
+        // 极端偏离
+        if (deviation < 0) {
+            adjustedTotal = Math.round(expTotal * 0.55 * 10) / 10;
+            message = '🚨 节奏极慢（偏离 ' + deviation.toFixed(0) + '%），比赛很可能是一场沉闷局，赛前预期严重高估';
+            suggestion = '强烈关注小角方向（Under 8.5/9.5）或考虑放弃角球投注';
+        } else {
+            adjustedTotal = Math.round(expTotal * 1.5 * 10) / 10;
+            message = '🔥 节奏极快（偏离 ' + deviation.toFixed(0) + '%），比赛非常开放，赛前预期严重低估';
+            suggestion = '强烈关注大角方向（Over 10.5/11.5）';
+        }
+    }
+
+    return {
+        message: message,
+        deviation: deviation,
+        direction: direction,
+        suggestion: suggestion,
+        predictedTotal: expTotal,
+        adjustedTotal: adjustedTotal,
+        liveMinute: liveMinute,
+        liveCorners: liveCorners,
+        actualRate: actualRate,
+        expectedRate: expectedRate
+    };
+}
+
+// =====================================================================
 // ★★★ 凯利公式注码计算器（半凯利）★★★
 // =====================================================================
 function calculateKellyStake(edge, odds, bankroll) {
@@ -1996,7 +2379,6 @@ function autoAddVerify(r, home, away){
   var pr = r.probs || {};
   var pred_1x2 = pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
   var sys_rec = r.rec?.main?.dir || null;
-  // 将系统推荐映射为home/draw/away（取第一个单词或简单判断）
   var sys_1x2 = null;
   if (sys_rec) {
     if (sys_rec.indexOf('主') >= 0 || sys_rec.toLowerCase().indexOf('home') >= 0) sys_1x2 = 'home';
@@ -2315,18 +2697,42 @@ function renderResults(snapData){
       h += '<span>胜率 <b style="color:#E6EDF7">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
       h += '<span>Edge <b style="color:#34D399">'+mainEdge+'</b></span>';
       if(rec.stake) h += '<span>注码 <b style="color:#E6EDF7">'+esc(rec.stake)+'</b></span>';
-      // 凯利公式
+      // ---- ★★★ 凯利公式注码建议 ★★★ ----
       var kelly = calculateKellyStake(main.edge, main.odds, ST.currentBankroll);
       if (kelly.stake > 0) {
-        h += '<div style="font-size:11px;color:#34D399;margin-top:4px">💰 建议注码：' + kelly.stake + ' 单位（占资金 ' + kelly.ratio + '，半凯利）</div>';
+          h += '<div style="width:100%;margin-top:4px;padding:4px 8px;background:#34D39914;border-radius:4px;font-size:11px;color:#34D399;border:1px solid #34D39933">';
+          h += '💰 凯利建议注码：<b>' + kelly.stake.toFixed(1) + ' 单位</b>（占资金 ' + kelly.ratio + '）';
+          h += '<span style="color:#8CA0C0;font-size:10px;margin-left:8px">半凯利 · 最大 5%</span>';
+          h += '</div>';
+      } else {
+          h += '<div style="width:100%;margin-top:4px;padding:4px 8px;background:#54678C14;border-radius:4px;font-size:10.5px;color:#54678C">';
+          h += 'ℹ️ 当前 Edge 不足以支持凯利注码（建议 <1%），轻仓参与或观望';
+          h += '</div>';
       }
-      h += '</div>';
-      if(main.note) h += '<div style="font-size:11px;color:#54678C;margin-top:6px">'+esc(main.note)+'</div>';
-      // 第三球防御
+      // ---- 小3.5防御策略 ----
       if (main.dir && main.dir.indexOf('Under 2.5') !== -1) {
-        h += '<div style="margin-top:8px;padding:6px 10px;background:#1E2A4455;border-radius:6px;font-size:11px;color:#8CA0C0">';
-        h += '🛡️ 防御策略：若担心被第三球绝杀，可同步轻仓 <b style="color:#F5B841">小3.5</b>（赔率若≥1.80），对冲“刚好3球”的风险。';
-        h += '</div>';
+          var hasUnder35 = false;
+          var under35Odds = null;
+          for (var mi = 0; mi < markets.length; mi++) {
+              if (markets[mi].m && markets[mi].m.indexOf('Under 3.5') !== -1) {
+                  hasUnder35 = true;
+                  under35Odds = markets[mi].odds;
+                  break;
+              }
+          }
+          h += '<div style="margin-top:10px;padding:8px 12px;background:#1E2A4455;border-radius:6px;border-left:3px solid #F5B841">';
+          h += '<div style="font-size:11px;color:#8CA0C0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+          h += '<span>🛡️ 防御策略</span>';
+          if (under35Odds && under35Odds >= 1.60) {
+              h += '<span style="font-size:10.5px;color:#34D399">小3.5 当前赔率 <b>' + under35Odds.toFixed(2) + '</b>，可同步轻仓（<b>0.5 单位</b>）作为第三球保险</span>';
+          } else if (under35Odds && under35Odds > 1.30) {
+              h += '<span style="font-size:10.5px;color:#F5B841">小3.5 当前赔率 <b>' + under35Odds.toFixed(2) + '</b>，赔率偏低，建议小额试探（<b>0.3 单位</b>）</span>';
+          } else {
+              h += '<span style="font-size:10.5px;color:#54678C">⚠️ 未检测到小3.5盘口，建议手动核对盘口列表</span>';
+          }
+          h += '</div>';
+          h += '<div style="font-size:10px;color:#54678C;margin-top:4px">💡 逻辑：若终场正好3球（如1-2、2-1），小2.5输，小3.5收，对冲组合可覆盖“第三球”风险</div>';
+          h += '</div>';
       }
       h += '</div>';
     } else if (recLevel.level === 'light') {
@@ -2528,9 +2934,9 @@ function refreshVerify(){
 
   var settled = ST.verify.filter(function(v){ return v.actual_1x2 !== null || v.actual_score !== null; });
   
-  // AI 统计
+  // ---- AI统计 ----
   var aiStats = { c1x2: 0, t1x2: 0, cscore: 0, tscore: 0, co25: 0, to25: 0, ccorners: 0, tcorners: 0 };
-  // 系统推荐统计
+  // ---- 系统推荐统计 ----
   var sysStats = { c1x2: 0, t1x2: 0 };
 
   settled.forEach(function(v){
@@ -2541,15 +2947,15 @@ function refreshVerify(){
     if(v.correct_corners !== null){ aiStats.tcorners++; if(v.correct_corners) aiStats.ccorners++; }
   });
 
-  var statCards = [
-    { label: '胜平负', hit: aiStats.c1x2, total: aiStats.t1x2 },
-    { label: '大小球2.5', hit: aiStats.co25, total: aiStats.to25 },
-    { label: '角球±1.5', hit: aiStats.ccorners, total: aiStats.tcorners }
-  ];
-
+  // ---- 渲染AI统计（3项） ----
   if(statsAi){
     statsAi.innerHTML = '';
-    statCards.forEach(function(card){
+    var aiCards = [
+      { label: '胜平负', hit: aiStats.c1x2, total: aiStats.t1x2 },
+      { label: '大小球2.5', hit: aiStats.co25, total: aiStats.to25 },
+      { label: '角球±1.5', hit: aiStats.ccorners, total: aiStats.tcorners }
+    ];
+    aiCards.forEach(function(card){
       var rate = card.total > 0 ? Math.round(card.hit / card.total * 100) : null;
       var div = document.createElement('div');
       div.className = 'stat-card';
@@ -2561,6 +2967,7 @@ function refreshVerify(){
     });
   }
 
+  // ---- 渲染系统推荐统计（1项：胜平负） ----
   if(statsSys){
     statsSys.innerHTML = '';
     var sysRate = sysStats.t1x2 > 0 ? Math.round(sysStats.c1x2 / sysStats.t1x2 * 100) : null;
@@ -2573,7 +2980,7 @@ function refreshVerify(){
     statsSys.appendChild(div);
   }
 
-  // 置信度-准确率关系（使用AI预测胜平负）
+  // ---- 置信度-准确率关系（使用AI预测） ----
   var confBins = { high: {range:'高(80+)', correct:0, total:0}, medium: {range:'中(60-79)', correct:0, total:0}, low: {range:'中低(40-59)', correct:0, total:0}, veryLow: {range:'低(<40)', correct:0, total:0} };
   settled.forEach(function(v){
     var score = v.conf_score !== undefined ? v.conf_score : 50;
@@ -2596,6 +3003,7 @@ function refreshVerify(){
     });
   }
 
+  // ---- 验证记录列表 ----
   if(ST.verify.length === 0){
     area.innerHTML = '<div class="card" style="text-align:center;padding:36px;color:#54678C">还没有验证记录</div>';
     return;
@@ -2711,8 +3119,54 @@ function updateEngineStatus(){
   document.getElementById('engine-status').textContent = '🔍 当前: ' + (names[engine.value] || '未知');
 }
 
+// =====================================================================
+// ★★★ 渲染联赛选项和比赛情境的独立函数 ★★★
+// =====================================================================
+function renderLeaguesAndContext() {
+  // 1. 渲染联赛选项
+  var lr = document.getElementById('league-row');
+  if (lr) {
+    lr.innerHTML = '';
+    LEAGUES.forEach(function(lg) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (lg === ST.league ? ' on' : '');
+      b.dataset.lg = lg;
+      b.textContent = lg;
+      b.addEventListener('click', function() {
+        ST.league = lg;
+        document.querySelectorAll('#league-row .chip').forEach(function(c) {
+          c.className = 'chip' + (c.dataset.lg === lg ? ' on' : '');
+        });
+      });
+      lr.appendChild(b);
+    });
+  }
+
+  // 2. 渲染比赛情境下拉菜单
+  var ctx = document.getElementById('inp-ctx');
+  if (ctx) {
+    ctx.innerHTML = '';
+    CTXS.forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c.v;
+      o.textContent = c.l;
+      if (c.v === ST.context) o.selected = true;
+      ctx.appendChild(o);
+    });
+    // 监听情境变化
+    ctx.addEventListener('change', function() {
+      ST.context = this.value;
+    });
+  }
+}
+
+// =====================================================================
+// init 函数
+// =====================================================================
 function init(){
   ST.log = loadLog(); ST.verify = loadVerify();
+  
+  // 从 localStorage 加载配置
   var dsKey = localStorage.getItem('ds_key') || '';
   var unsearchKey = localStorage.getItem('unsearch_key') || '';
   var tavilyKey = localStorage.getItem('tavily_key') || '';
@@ -2720,16 +3174,31 @@ function init(){
   var iosUrl = localStorage.getItem('ios_url') || 'http://10.0.1.11:8000';
   var engine = localStorage.getItem('ocr_engine') || 'ios';
   var bankroll = parseFloat(localStorage.getItem('bankroll')) || 37;
+  var savedLeague = localStorage.getItem('vt_league') || '英超';
+  var savedContext = localStorage.getItem('vt_context') || 'regular';
 
+  // 应用保存的状态
+  ST.league = savedLeague;
+  ST.context = savedContext;
+  ST.dsKey = dsKey;
+  ST.unsearchKey = unsearchKey;
+  ST.tavilyKey = tavilyKey;
+  ST.ocrspaceKey = ocrspaceKey;
+  ST.iosUrl = iosUrl;
+  ST.ocrEngine = engine;
+  ST.currentBankroll = bankroll;
+
+  // 设置输入框的值
   document.getElementById('ds-key-inp').value = dsKey;
   document.getElementById('unsearch-key-inp').value = unsearchKey;
   document.getElementById('tavily-key-inp').value = tavilyKey;
   document.getElementById('ocrspace-key-inp').value = ocrspaceKey;
   document.getElementById('ios-url-inp').value = iosUrl;
   document.getElementById('bankroll-input').value = bankroll;
-  ST.dsKey = dsKey; ST.unsearchKey = unsearchKey; ST.tavilyKey = tavilyKey; ST.ocrspaceKey = ocrspaceKey; ST.iosUrl = iosUrl; ST.ocrEngine = engine; ST.currentBankroll = bankroll;
+  
   updateKeyUI();
 
+  // OCR 引擎单选按钮
   var radios = document.querySelectorAll('input[name="ocrEngine"]');
   radios.forEach(function(el){
     if(el.value === engine) el.checked = true;
@@ -2741,21 +3210,12 @@ function init(){
   });
   updateEngineStatus();
 
-  var lr = document.getElementById('league-row');
-  if(lr){
-    LEAGUES.forEach(function(lg){
-      var b = document.createElement('button');
-      b.className = 'chip' + (lg === ST.league ? ' on' : '');
-      b.dataset.lg = lg; b.textContent = lg;
-      b.addEventListener('click', function(){ ST.league = lg; document.querySelectorAll('[data-lg]').forEach(function(c){ c.className = 'chip' + (c.dataset.lg === lg ? ' on' : ''); }); });
-      lr.appendChild(b);
-    });
-  }
-  var ctx = document.getElementById('inp-ctx');
-  if(ctx){
-    CTXS.forEach(function(c){ var o = document.createElement('option'); o.value = c.v; o.textContent = c.l; if(c.v === 'regular') o.selected = true; ctx.appendChild(o); });
-  }
+  // =================================================================
+  // ★★★ 关键修复：渲染联赛选项和比赛情境 ★★★
+  // =================================================================
+  renderLeaguesAndContext();
 
+  // 图片上传
   var imgFile = document.getElementById('img-file');
   if(imgFile){
     imgFile.addEventListener('change', function(e){
@@ -2767,13 +3227,16 @@ function init(){
     });
   }
 
+  // 按钮事件
   document.getElementById('img-add-btn').addEventListener('click', function(){ document.getElementById('img-file').click(); });
   document.getElementById('analyze-btn').addEventListener('click', analyze);
   document.getElementById('mode-img').addEventListener('click', function(){ setOddsMode('img'); });
   document.getElementById('mode-txt').addEventListener('click', function(){ setOddsMode('txt'); });
 
+  // Tab 切换
   document.querySelectorAll('.tab-btn').forEach(function(b){ b.addEventListener('click', function(){ switchTab(b.dataset.tab); }); });
 
+  // Key 面板
   document.getElementById('key-toggle').addEventListener('click', toggleKeyPanel);
   document.getElementById('key-show').addEventListener('click', function(){
     var ds = document.getElementById('ds-key-inp');
@@ -2800,6 +3263,8 @@ function init(){
     ST.dsKey = ''; ST.unsearchKey = ''; ST.tavilyKey = ''; ST.ocrspaceKey = '';
     updateKeyUI();
   });
+
+  // Key 输入监听
   document.getElementById('ds-key-inp').addEventListener('input', function(){
     localStorage.setItem('ds_key', this.value);
     ST.dsKey = this.value;
@@ -2829,6 +3294,7 @@ function init(){
     ST.currentBankroll = val;
   });
 
+  // 快照清除
   document.getElementById('snapshot-clear-btn').addEventListener('click', function(){
     var home = getField('home'), away = getField('away');
     if(!home || !away){ alert('请先填写主客队名称'); return; }
@@ -2839,6 +3305,7 @@ function init(){
     }
   });
 
+  // 主客队输入监听（更新快照UI）
   document.getElementById('inp-home').addEventListener('input', function(){
     updateSnapshotUI(ST.league, getField('home'), getField('away'));
   });
@@ -2851,29 +3318,57 @@ function init(){
     var min = parseInt(document.getElementById('live-minute').value);
     var corners = parseInt(document.getElementById('live-corners').value);
     if (!min || !corners) {
-      alert('请输入分钟数和当前角球数');
-      return;
+        alert('请输入分钟数和当前角球数');
+        return;
     }
     var events = {};
     var eventSelect = document.getElementById('live-event');
     if (eventSelect) {
-      if (eventSelect.value === 'red') events.redCard = true;
-      if (eventSelect.value === 'penalty') events.penalty = true;
+        if (eventSelect.value === 'red') events.redCard = true;
+        if (eventSelect.value === 'penalty') events.penalty = true;
     }
+    var feedbackEl = document.getElementById('live-feedback');
+    var paceResultEl = document.getElementById('pace-analysis-result');
+    
     if (ST.result) {
-      var adjusted = applyLiveAdjustments(ST.result, min, corners, events);
-      if (adjusted) {
-        // 显示在结果区域顶部（或者浮窗）
-        document.getElementById('live-feedback').textContent = '✅ 修正已应用：角球预期 ' + adjusted.corners.exp_total + '，' + (adjusted._adjust_note || '');
-        // 也可以重新渲染结果（但为了不覆盖原始分析，只作提示）
-      } else {
-        document.getElementById('live-feedback').textContent = '⚠️ 修正失败，请检查数据';
-      }
+        var adjusted = applyLiveAdjustments(ST.result, min, corners, events);
+        var paceAnalysis = analyzeLivePace(ST.result, min, corners);
+        
+        var html = '';
+        if (adjusted && adjusted._adjust_note) {
+            html += '✅ ' + adjusted._adjust_note + '<br>';
+        }
+        if (paceAnalysis) {
+            html += paceAnalysis.message + '<br>';
+            html += '💡 ' + paceAnalysis.suggestion;
+            if (paceAnalysis.adjustedTotal && paceAnalysis.adjustedTotal !== paceAnalysis.predictedTotal) {
+                html += ' | 修正预期：' + paceAnalysis.adjustedTotal.toFixed(1) + '角（原预期 ' + paceAnalysis.predictedTotal.toFixed(1) + '角）';
+            }
+        }
+        feedbackEl.innerHTML = html;
+        feedbackEl.style.display = 'block';
+        
+        if (paceAnalysis && paceResultEl) {
+            paceResultEl.style.display = 'block';
+            var color = Math.abs(paceAnalysis.deviation) > 25 ? '#F5B841' : '#34D399';
+            var directionEmoji = paceAnalysis.deviation > 0 ? '⚡' : '🐢';
+            paceResultEl.innerHTML = 
+                '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+                '<span>📊 节奏偏离度：<b style="color:' + color + '">' + paceAnalysis.deviation.toFixed(0) + '%</b> ' + directionEmoji + '</span>' +
+                '<span>实际速率：<b style="color:#E6EDF7">' + paceAnalysis.actualRate.toFixed(3) + '</b> 角/分钟</span>' +
+                '<span>预期速率：<b style="color:#8CA0C0">' + paceAnalysis.expectedRate.toFixed(3) + '</b> 角/分钟</span>' +
+                '</div>' +
+                '<div style="margin-top:6px;font-size:11.5px;color:#8CA0C0">' + paceAnalysis.message + '</div>' +
+                '<div style="margin-top:4px;color:#F5B841;font-weight:700;font-size:12.5px">💡 ' + paceAnalysis.suggestion + '</div>' +
+                (paceAnalysis.adjustedTotal && paceAnalysis.adjustedTotal !== paceAnalysis.predictedTotal ? 
+                    '<div style="margin-top:4px;font-size:11px;color:#6FA8F5">修正预期：' + paceAnalysis.adjustedTotal.toFixed(1) + '角（原预期 ' + paceAnalysis.predictedTotal.toFixed(1) + '角）</div>' : '');
+        }
     } else {
-      alert('请先完成比赛分析，再应用实时修正');
+        alert('请先完成比赛分析，再应用实时修正');
     }
   });
 
+  // 事件委托
   document.addEventListener('click', function(e){
     var t = e.target;
     var action = t.dataset.action; var id = t.dataset.id ? parseInt(t.dataset.id) : null;
@@ -2895,9 +3390,20 @@ function init(){
 
   setOddsMode('img');
   switchTab('analyze');
-  refreshLog(); refreshVerify();
+  refreshLog(); 
+  refreshVerify();
 
   updateSnapshotUI(ST.league, getField('home'), getField('away'));
+
+  // 保存联赛和情境到 localStorage
+  document.querySelectorAll('#league-row .chip').forEach(function(c) {
+    c.addEventListener('click', function() {
+      localStorage.setItem('vt_league', ST.league);
+    });
+  });
+  document.getElementById('inp-ctx').addEventListener('change', function() {
+    localStorage.setItem('vt_context', this.value);
+  });
 
   if(window.location.protocol === 'file:'){
     console.warn('⚠️ 检测到 file:// 协议');
@@ -2907,6 +3413,7 @@ function init(){
     document.querySelector('.wrap').prepend(notice);
   }
 }
+
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
