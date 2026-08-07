@@ -1486,17 +1486,32 @@ function parseCornerOddsFromText(text) {
   var lines = text.split('\n');
   var cornerLines = [];
   var insideCorner = false;
+  
+  // ★ 修复：支持 Over8.5 和 Over 8.5 两种格式
   var tableRegex = /\|\s*Over\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*Under\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|/i;
-  var overRegex = /Over\s*([\d.]+)\s*([\d.]+)/i;
-  var underRegex = /Under\s*([\d.]+)\s*([\d.]+)/i;
+  var overRegex = /Over\s*([\d.]+)\s+([\d.]+)/i;  // Over 8.5 1.18（有空格）
+  var overNoSpaceRegex = /Over([\d.]+)\s+([\d.]+)/i;  // ★ 新增：Over8.5 1.18（无空格）
+  var underRegex = /Under\s*([\d.]+)\s+([\d.]+)/i;  // Under 8.5 4.20（有空格）
+  var underNoSpaceRegex = /Under([\d.]+)\s+([\d.]+)/i;  // ★ 新增：Under8.5 4.20（无空格）
   
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
-    if (line.match(/TOTAL CORNERS|角球总数|Corners/i)) {
+    
+    // 检测角球区域
+    if (line.match(/TOTAL\s*CORNERS|角球总数|Corners/i)) {
       insideCorner = true;
       continue;
     }
+    
+    // ★ 检测到 Other Markets / Hide list / Live streaming 时退出角球模式
+    if (insideCorner && (line.match(/Hide list|More Bets|Live streaming|Login|Other Markets/i))) {
+      insideCorner = false;
+      continue;
+    }
+    
     if (!insideCorner) continue;
+    
+    // 匹配表格格式
     var tableMatch = line.match(tableRegex);
     if (tableMatch) {
       var lineVal = parseFloat(tableMatch[1]);
@@ -1513,14 +1528,29 @@ function parseCornerOddsFromText(text) {
         continue;
       }
     }
+    
+    // ★ 尝试匹配 Over 8.5 1.18（有空格）
     var overMatch = line.match(overRegex);
+    // ★ 如果失败，尝试匹配 Over8.5 1.18（无空格）
+    if (!overMatch) {
+      overMatch = line.match(overNoSpaceRegex);
+    }
+    
+    // ★ 尝试匹配 Under 8.5 4.20（有空格）
     var underMatch = line.match(underRegex);
+    // ★ 如果失败，尝试匹配 Under8.5 4.20（无空格）
+    if (!underMatch) {
+      underMatch = line.match(underNoSpaceRegex);
+    }
+    
     if (overMatch && underMatch) {
       var line1 = parseFloat(overMatch[1]);
       var odds1 = parseFloat(overMatch[2]);
       var line2 = parseFloat(underMatch[1]);
       var odds2 = parseFloat(underMatch[2]);
-      if (!isNaN(line1) && !isNaN(odds1) && !isNaN(line2) && !isNaN(odds2) && line1 === line2) {
+      
+      // ★ 角球盘口 line 值不可能小于 5.0，用于过滤大小球误识别
+      if (!isNaN(line1) && !isNaN(odds1) && !isNaN(line2) && !isNaN(odds2) && line1 === line2 && line1 >= 5.0) {
         cornerLines.push({
           line: line1,
           overOdds: odds1,
@@ -1530,10 +1560,9 @@ function parseCornerOddsFromText(text) {
         continue;
       }
     }
-    if (line.match(/Hide list|More Bets/i)) {
-      insideCorner = false;
-    }
   }
+  
+  // 去重
   var seen = {};
   var result = [];
   cornerLines.forEach(function(c){
