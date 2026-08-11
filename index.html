@@ -755,6 +755,318 @@ function lookupCorners(league, home, away) {
 }
 
 // =====================================================================
+// ★★★ 三联赛角球规则引擎（瑞超/挪超/阿甲）★★★
+// =====================================================================
+
+// 联赛基线数据
+var LEAGUE_BASELINE = {
+    "瑞超": 10.5,
+    "挪超": 10.5,
+    "阿根廷甲": 8.7,
+    "英超": 10.2,
+    "西甲": 9.8,
+    "意甲": 9.9,
+    "德甲": 10.5,
+    "法甲": 9.6,
+    "MLS": 9.9,
+    "巴西甲": 10.0,
+    "墨甲": 9.5,
+    "其他": 9.5
+};
+
+// 大角/小角阈值（基于盘口9.5为基准）
+var CORNER_THRESHOLDS = {
+    "瑞超": { big: 12, small: 9.5, baseline: 10.5 },
+    "挪超": { big: 10.5, small: 9.5, baseline: 10.5 },
+    "阿根廷甲": { big: 10, small: 8, baseline: 8.7 }
+};
+
+// 无脑大角规则（方向：大角）
+var CORNER_RULES_BIG = {
+    "瑞超": [
+        { team: "赫根", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%大角" },
+        { team: "佐加顿斯", condition: "away_vs_strong", prob: 1.0, note: "客场vs强队100%大角" },
+        { team: "天狼星", condition: "away", prob: 0.86, note: "客场大角率86%" },
+        { team: "索尔纳", condition: "home_vs_strong", prob: 1.0, note: "主场vs强队100%大角" },
+        { team: "哈姆斯塔德", condition: "away_vs_weak", prob: 1.0, note: "客场vs弱队100%大角" },
+        { team: "瓦斯特拉斯", condition: "away_vs_weak", prob: 1.0, note: "客场vs弱队100%大角" },
+        { team: "哥德堡", condition: "away_vs_strong", prob: 0.75, note: "客场vs强队大角率75%" },
+        { team: "卡尔马", condition: "home_vs_weak", prob: 0.80, note: "主场vs弱队大角率80%" }
+    ],
+    "挪超": [
+        { team: "维京", condition: "home", prob: 1.0, note: "主场100%大角" },
+        { team: "博德闪耀", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%大角" },
+        { team: "桑德菲杰", condition: "away", prob: 0.89, note: "客场大角率88.9%" },
+        { team: "罗森博格", condition: "home", prob: 0.90, note: "主场大角率90%" },
+        { team: "布兰", condition: "away", prob: 0.80, note: "客场大角率80%" },
+        { team: "奥勒松", condition: "home_vs_strong", prob: 0.80, note: "主场vs强队大角率80%" }
+    ],
+    "阿根廷甲": [
+        { team: "阿根廷独立", condition: "home", prob: 0.80, note: "主场大角率80%" },
+        { team: "飓风队", condition: "away", prob: 0.73, note: "客场大角率72.7%" },
+        { team: "拉普拉塔体操", condition: "away", prob: 0.67, note: "客场大角率66.7%" },
+        { team: "阿根廷青年人", condition: "away", prob: 0.67, note: "客场大角率66.7%" },
+        { team: "图库曼竞技", condition: "home", prob: 0.58, note: "主场大角率58.3%" },
+        { team: "塔勒瑞斯", condition: "home_vs_strong", prob: 0.60, note: "主场vs强队大角率60%" },
+        { team: "贝尔格拉诺", condition: "home_vs_weak", prob: 0.67, note: "主场vs弱队大角率67%" },
+        { team: "罗萨里奥中央", condition: "away_vs_strong", prob: 0.80, note: "客场vs强队大角率80%" }
+    ]
+};
+
+// 无脑小角规则（方向：小角）
+var CORNER_RULES_SMALL = {
+    "瑞超": [
+        { team: "代格福什", condition: "any", prob: 0.69, note: "任何比赛68.8%小角" },
+        { team: "马尔默", condition: "home", prob: 1.0, note: "主场100%小角(≤11角)" },
+        { team: "埃尔夫斯堡", condition: "away", prob: 0.75, note: "客场小角率75%" },
+        { team: "哈马比", condition: "derby", prob: 1.0, note: "德比战100%小角" },
+        { team: "卡尔马", condition: "home_vs_strong", prob: 1.0, note: "主场vs强队100%小角" },
+        { team: "索尔纳", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
+        { team: "奥尔格里特", condition: "home", prob: 0.67, note: "主场小角率67%" },
+        { team: "米亚尔比", condition: "away", prob: 0.80, note: "客场小角率80%" }
+    ],
+    "挪超": [
+        { team: "斯达", condition: "home", prob: 0.88, note: "主场87.5%小角" },
+        { team: "腓特烈斯塔", condition: "away", prob: 0.75, note: "客场75%小角" },
+        { team: "萨普斯堡", condition: "away", prob: 0.78, note: "客场77.8%小角" },
+        { team: "莫尔德", condition: "home", prob: 0.75, note: "主场75%小角" },
+        { team: "汉坎", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
+        { team: "克里斯蒂安松", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" }
+    ],
+    "阿根廷甲": [
+        { team: "巴拉卡斯中央", condition: "any", prob: 0.91, note: "任何比赛90.9%小角" },
+        { team: "国防与司法", condition: "home", prob: 1.0, note: "主场100%小角" },
+        { team: "班菲尔德", condition: "home", prob: 0.91, note: "主场91%小角" },
+        { team: "河床", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
+        { team: "博卡青年", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
+        { team: "萨斯菲尔德", condition: "home", prob: 0.70, note: "主场小角率70%" },
+        { team: "科尔多瓦中央", condition: "away", prob: 0.89, note: "客场89%小角" },
+        { team: "圣洛伦索", condition: "away_vs_weak", prob: 0.86, note: "客场vs弱队86%小角" },
+        { team: "普拉滕斯", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" }
+    ]
+};
+
+// 半场0-0小角规则
+var HALFTIME_RULES = {
+    "阿根廷甲": [
+        { team: "巴拉卡斯中央", prob: 0.917 },
+        { team: "班菲尔德", prob: 0.82 },
+        { team: "普拉滕斯", prob: 0.82 },
+        { team: "圣洛伦索", prob: 0.83 }
+    ],
+    "瑞超": [
+        { team: "代格福什", prob: 0.71 },
+        { team: "埃尔夫斯堡", prob: 0.75 },
+        { team: "马尔默", prob: 0.80 }
+    ],
+    "挪超": [
+        { team: "斯达", prob: 0.83 },
+        { team: "腓特烈斯塔", prob: 0.80 },
+        { team: "萨普斯堡", prob: 0.78 }
+    ]
+};
+
+// 球队角球完整画像（用于详细分析）
+var TEAM_CORNER_PROFILES = {
+    // ===== 瑞超 =====
+    "天狼星": { league: "瑞超", avg: 13.06, big_rate: 0.75, home_avg: 13.22, away_avg: 12.86, style: "对手角球驱动", note: "大角之王" },
+    "赫根": { league: "瑞超", avg: 12.88, big_rate: 0.625, home_avg: 12.38, away_avg: 13.25, style: "主场虐菜驱动", note: "主场vs弱队100%" },
+    "佐加顿斯": { league: "瑞超", avg: 11.73, big_rate: 0.53, home_avg: 10.25, away_avg: 13.57, style: "本方角球驱动", note: "客场大角" },
+    "哥德堡": { league: "瑞超", avg: 11.31, big_rate: 0.50, home_avg: 11.75, away_avg: 10.88, style: "对手角球驱动", note: "强队压上则大" },
+    "布洛马波卡纳": { league: "瑞超", avg: 10.06, big_rate: 0.375, home_avg: 10.57, away_avg: 9.67, style: "中庸型", note: "" },
+    "卡尔马": { league: "瑞超", avg: 10.25, big_rate: 0.375, home_avg: 10.63, away_avg: 9.88, style: "主场反差型", note: "主场vs强大，vs弱小" },
+    "索尔纳": { league: "瑞超", avg: 10.56, big_rate: 0.31, home_avg: 9.80, away_avg: 10.91, style: "镜像型", note: "主场看对手实力" },
+    "瓦斯特拉斯": { league: "瑞超", avg: 10.06, big_rate: 0.31, home_avg: 9.22, away_avg: 11.14, style: "客场互爆型", note: "客场vs同级大" },
+    "米亚尔比": { league: "瑞超", avg: 9.21, big_rate: 0.286, home_avg: 11.50, away_avg: 8.30, style: "主大客小型", note: "客场无脑小" },
+    "哈姆斯塔德": { league: "瑞超", avg: 10.31, big_rate: 0.25, home_avg: 9.44, away_avg: 11.57, style: "客场大主场小", note: "客场vs同级大" },
+    "哈马比": { league: "瑞超", avg: 9.69, big_rate: 0.25, home_avg: 9.89, away_avg: 9.43, style: "控制型", note: "遇弱则小，遇强则大" },
+    "马尔默": { league: "瑞超", avg: 10.31, big_rate: 0.25, home_avg: 8.83, away_avg: 11.30, style: "主场永不角", note: "主场无脑小" },
+    "奥尔格里特": { league: "瑞超", avg: 9.31, big_rate: 0.25, home_avg: 8.00, away_avg: 10.00, style: "主场小角王", note: "主场无脑小" },
+    "埃尔夫斯堡": { league: "瑞超", avg: 9.06, big_rate: 0.188, home_avg: 9.88, away_avg: 8.25, style: "客场小角王", note: "客场无脑小" },
+    "哥德堡盖斯": { league: "瑞超", avg: 9.94, big_rate: 0.188, home_avg: 10.14, away_avg: 9.78, style: "稳定中庸型", note: "稳定小角" },
+    "代格福什": { league: "瑞超", avg: 9.31, big_rate: 0.125, home_avg: 9.14, away_avg: 9.44, style: "小角之王", note: "无脑小角" },
+    
+    // ===== 挪超 =====
+    "博德闪耀": { league: "挪超", avg: 12.22, big_rate: 0.833, home_avg: 12.0, away_avg: 11.0, style: "碾压型大角", note: "主场vs弱队100%" },
+    "维京": { league: "挪超", avg: 13.69, big_rate: 0.813, home_avg: 14.5, away_avg: 12.5, style: "互爆型大角", note: "主场任何对手大角" },
+    "布兰": { league: "挪超", avg: 12.00, big_rate: 0.706, home_avg: 11.5, away_avg: 12.5, style: "全天候大角", note: "客场大角" },
+    "罗森博格": { league: "挪超", avg: 12.18, big_rate: 0.706, home_avg: 13.5, away_avg: 10.5, style: "主场大角王", note: "主场大角90%" },
+    "桑德菲杰": { league: "挪超", avg: 12.56, big_rate: 0.75, home_avg: 11.5, away_avg: 13.5, style: "客场大角王", note: "客场大角88.9%" },
+    "奥勒松": { league: "挪超", avg: 12.63, big_rate: 0.625, home_avg: 12.5, away_avg: 12.5, style: "均衡型", note: "主场vs强大" },
+    "莫尔德": { league: "挪超", avg: 10.25, big_rate: 0.375, home_avg: 9.5, away_avg: 11.0, style: "主小客大", note: "主场无脑小" },
+    "利勒斯特罗姆": { league: "挪超", avg: 10.94, big_rate: 0.438, home_avg: 11.0, away_avg: 10.5, style: "平衡型", note: "" },
+    "克里斯蒂安松": { league: "挪超", avg: 10.75, big_rate: 0.438, home_avg: 10.0, away_avg: 11.5, style: "主场小角王", note: "主场vs弱小" },
+    "萨普斯堡": { league: "挪超", avg: 10.47, big_rate: 0.412, home_avg: 11.5, away_avg: 9.5, style: "主大客小", note: "客场无脑小" },
+    "腓特烈斯塔": { league: "挪超", avg: 11.00, big_rate: 0.438, home_avg: 12.0, away_avg: 10.0, style: "客场小角王", note: "客场小角75%" },
+    "汉坎": { league: "挪超", avg: 10.12, big_rate: 0.353, home_avg: 9.5, away_avg: 10.5, style: "主场小角王", note: "主场vs弱小" },
+    "斯达": { league: "挪超", avg: 10.78, big_rate: 0.389, home_avg: 9.0, away_avg: 12.5, style: "主场最小角", note: "主场无脑小" },
+    "KFUM": { league: "挪超", avg: 10.0, big_rate: 0.40, home_avg: 10.0, away_avg: 10.0, style: "均衡型", note: "" },
+    
+    // ===== 阿甲 =====
+    "阿根廷独立": { league: "阿根廷甲", avg: 9.81, big_rate: 0.524, home_avg: 10.40, away_avg: 9.10, style: "主场大角", note: "主场大角提款机" },
+    "飓风队": { league: "阿根廷甲", avg: 9.00, big_rate: 0.455, home_avg: 7.50, away_avg: 10.10, style: "客场大角", note: "客场大角王" },
+    "拉普拉塔体操": { league: "阿根廷甲", avg: 9.45, big_rate: 0.455, home_avg: 8.00, away_avg: 10.60, style: "客场大角", note: "客场大角王二号" },
+    "图库曼竞技": { league: "阿根廷甲", avg: 9.18, big_rate: 0.455, home_avg: 10.10, away_avg: 7.60, style: "主场大角", note: "主场大角王" },
+    "萨米恩托": { league: "阿根廷甲", avg: 8.91, big_rate: 0.455, home_avg: 8.20, away_avg: 9.80, style: "客场大角", note: "" },
+    "阿尔多斯维": { league: "阿根廷甲", avg: 9.00, big_rate: 0.444, home_avg: 8.00, away_avg: 9.30, style: "对手角球驱动", note: "" },
+    "门多萨体操击剑": { league: "阿根廷甲", avg: 8.86, big_rate: 0.429, home_avg: 7.80, away_avg: 9.60, style: "镜像驱动", note: "" },
+    "拉普拉塔大学生": { league: "阿根廷甲", avg: 9.27, big_rate: 0.429, home_avg: 9.00, away_avg: 8.50, style: "主场虐菜", note: "" },
+    "纽维尔老男孩": { league: "阿根廷甲", avg: 9.00, big_rate: 0.409, home_avg: 9.20, away_avg: 9.10, style: "混合型", note: "" },
+    "贝尔格拉诺": { league: "阿根廷甲", avg: 8.82, big_rate: 0.409, home_avg: 8.30, away_avg: 9.30, style: "全面进攻", note: "" },
+    "罗萨里奥中央": { league: "阿根廷甲", avg: 8.55, big_rate: 0.409, home_avg: 7.30, away_avg: 9.70, style: "极端分化", note: "客场vs强队80%" },
+    "塔勒瑞斯": { league: "阿根廷甲", avg: 9.23, big_rate: 0.409, home_avg: 10.40, away_avg: 8.20, style: "主场大角", note: "主场大角龙" },
+    "阿根廷青年人": { league: "阿根廷甲", avg: 8.91, big_rate: 0.364, home_avg: 7.50, away_avg: 10.30, style: "主小客大", note: "客场大角" },
+    "博卡青年": { league: "阿根廷甲", avg: 8.77, big_rate: 0.364, home_avg: 7.80, away_avg: 9.20, style: "反直觉型", note: "主场vs弱队小角" },
+    "圣塔菲联": { league: "阿根廷甲", avg: 8.77, big_rate: 0.364, home_avg: 8.90, away_avg: 9.20, style: "自身角球驱动", note: "" },
+    "竞技": { league: "阿根廷甲", avg: 8.45, big_rate: 0.318, home_avg: 7.40, away_avg: 9.20, style: "主小客大", note: "主场角球坟墓" },
+    "班菲尔德": { league: "阿根廷甲", avg: 8.14, big_rate: 0.318, home_avg: 7.40, away_avg: 8.90, style: "主小客大", note: "主场角球坟墓二号" },
+    "拉努斯": { league: "阿根廷甲", avg: 8.00, big_rate: 0.318, home_avg: 7.60, away_avg: 8.80, style: "主弱小客强大", note: "" },
+    "科尔多瓦学院": { league: "阿根廷甲", avg: 8.33, big_rate: 0.333, home_avg: 7.30, away_avg: 9.50, style: "客大主小", note: "客场大角龙" },
+    "堤格雷": { league: "阿根廷甲", avg: 8.27, big_rate: 0.318, home_avg: 7.80, away_avg: 8.90, style: "均衡型", note: "" },
+    "河床": { league: "阿根廷甲", avg: 8.57, big_rate: 0.286, home_avg: 7.50, away_avg: 8.20, style: "豪门陷阱", note: "主场vs弱队小角" },
+    "圣洛伦索": { league: "阿根廷甲", avg: 7.91, big_rate: 0.273, home_avg: 8.10, away_avg: 7.70, style: "传统强队小角", note: "客场vs弱队小角" },
+    "普拉滕斯": { league: "阿根廷甲", avg: 7.77, big_rate: 0.227, home_avg: 7.40, away_avg: 7.90, style: "小球驱动", note: "第二小角提款机" },
+    "科尔多瓦中央": { league: "阿根廷甲", avg: 7.72, big_rate: 0.278, home_avg: 7.30, away_avg: 7.30, style: "弱队小角", note: "小角提款机" },
+    "萨斯菲尔德": { league: "阿根廷甲", avg: 8.52, big_rate: 0.238, home_avg: 7.60, away_avg: 7.60, style: "主场小角", note: "主场小角王" },
+    "国防与司法": { league: "阿根廷甲", avg: 7.86, big_rate: 0.190, home_avg: 7.20, away_avg: 8.50, style: "主场防守", note: "主场角球坟墓" },
+    "巴拉卡斯中央": { league: "阿根廷甲", avg: 6.95, big_rate: 0.091, home_avg: 5.80, away_avg: 7.60, style: "全联赛小角", note: "无脑小角王" }
+};
+
+// =====================================================================
+// ★★★ 角球规则查询函数 ★★★
+// =====================================================================
+
+/**
+ * 查询角球建议
+ * @param {string} league - 联赛名称（瑞超/挪超/阿根廷甲）
+ * @param {string} homeTeam - 主队名称
+ * @param {string} awayTeam - 客队名称
+ * @param {number} halfTimeCorners - 半场角球数（可选）
+ * @param {number} currentMinute - 当前分钟（可选）
+ * @param {number} currentCorners - 当前角球数（可选）
+ * @returns {object} { direction, confidence, note, matchedRule }
+ */
+function queryCornerAdvice(league, homeTeam, awayTeam, halfTimeCorners, currentMinute, currentCorners) {
+    // 标准化球队名称
+    var homeNorm = normalizeTeamName(homeTeam, league);
+    var awayNorm = normalizeTeamName(awayTeam, league);
+    
+    var result = {
+        direction: null,
+        confidence: null,
+        note: null,
+        matchedRule: null,
+        baseline: LEAGUE_BASELINE[league] || 9.5
+    };
+    
+    // 1. 检查是否匹配无脑规则
+    var bigRules = CORNER_RULES_BIG[league] || [];
+    var smallRules = CORNER_RULES_SMALL[league] || [];
+    
+    // 检查主队大角规则
+    for (var i = 0; i < bigRules.length; i++) {
+        var rule = bigRules[i];
+        if (rule.team === homeNorm || rule.team === homeTeam) {
+            // 检查条件
+            if (rule.condition === 'any' || rule.condition === 'home' || rule.condition === 'home_vs_weak' || rule.condition === 'home_vs_strong') {
+                result.direction = '大角';
+                result.confidence = rule.prob;
+                result.note = rule.note;
+                result.matchedRule = rule;
+                return result;
+            }
+        }
+        if (rule.team === awayNorm || rule.team === awayTeam) {
+            if (rule.condition === 'any' || rule.condition === 'away' || rule.condition === 'away_vs_weak' || rule.condition === 'away_vs_strong') {
+                result.direction = '大角';
+                result.confidence = rule.prob;
+                result.note = rule.note;
+                result.matchedRule = rule;
+                return result;
+            }
+        }
+    }
+    
+    // 检查主队小角规则
+    for (var j = 0; j < smallRules.length; j++) {
+        var rule2 = smallRules[j];
+        if (rule2.team === homeNorm || rule2.team === homeTeam) {
+            if (rule2.condition === 'any' || rule2.condition === 'home' || rule2.condition === 'home_vs_weak' || rule2.condition === 'home_vs_strong') {
+                result.direction = '小角';
+                result.confidence = rule2.prob;
+                result.note = rule2.note;
+                result.matchedRule = rule2;
+                return result;
+            }
+        }
+        if (rule2.team === awayNorm || rule2.team === awayTeam) {
+            if (rule2.condition === 'any' || rule2.condition === 'away' || rule2.condition === 'away_vs_weak' || rule2.condition === 'away_vs_strong') {
+                result.direction = '小角';
+                result.confidence = rule2.prob;
+                result.note = rule2.note;
+                result.matchedRule = rule2;
+                return result;
+            }
+        }
+    }
+    
+    // 2. 检查半场0-0小角规则
+    if (halfTimeCorners !== undefined && halfTimeCorners <= 2) {
+        var halfRules = HALFTIME_RULES[league] || [];
+        for (var k = 0; k < halfRules.length; k++) {
+            var hr = halfRules[k];
+            if (hr.team === homeNorm || hr.team === homeTeam || hr.team === awayNorm || hr.team === awayTeam) {
+                result.direction = '小角';
+                result.confidence = hr.prob;
+                result.note = '半场' + halfTimeCorners + '角，' + hr.team + '半场0-0小角率' + (hr.prob * 100).toFixed(0) + '%';
+                result.matchedRule = hr;
+                return result;
+            }
+        }
+    }
+    
+    // 3. 基于数据库预期值给出中性建议
+    var homeProfile = TEAM_CORNER_PROFILES[homeNorm] || TEAM_CORNER_PROFILES[homeTeam];
+    var awayProfile = TEAM_CORNER_PROFILES[awayNorm] || TEAM_CORNER_PROFILES[awayTeam];
+    
+    if (homeProfile && awayProfile) {
+        var expectedTotal = (homeProfile.home_avg || homeProfile.avg || 9) + (awayProfile.away_avg || awayProfile.avg || 9);
+        var threshold = CORNER_THRESHOLDS[league] || { big: 10.5, small: 9.5 };
+        
+        if (expectedTotal >= threshold.big) {
+            result.direction = '倾向大角';
+            result.confidence = 0.50;
+            result.note = '预期总角球 ' + expectedTotal.toFixed(1) + '角（' + homeNorm + ' ' + (homeProfile.avg || '?') + ' + ' + awayNorm + ' ' + (awayProfile.avg || '?') + '）';
+        } else if (expectedTotal <= threshold.small) {
+            result.direction = '倾向小角';
+            result.confidence = 0.50;
+            result.note = '预期总角球 ' + expectedTotal.toFixed(1) + '角（' + homeNorm + ' ' + (homeProfile.avg || '?') + ' + ' + awayNorm + ' ' + (awayProfile.avg || '?') + '）';
+        } else {
+            result.direction = '观望';
+            result.confidence = 0.50;
+            result.note = '预期总角球 ' + expectedTotal.toFixed(1) + '角，处于灰色地带';
+        }
+        result.baseline = expectedTotal;
+        return result;
+    }
+    
+    // 4. 默认返回
+    result.direction = '观望';
+    result.confidence = 0.50;
+    result.note = '无匹配规则，建议观察半场数据';
+    return result;
+}
+
+/**
+ * 获取球队角球画像
+ */
+function getTeamProfile(teamName, league) {
+    var norm = normalizeTeamName(teamName, league);
+    return TEAM_CORNER_PROFILES[norm] || null;
+}
+
+
+// =====================================================================
 // 动态角球折扣系数
 // =====================================================================
 function getCornerDiscount(context, league, roundInfo) {
