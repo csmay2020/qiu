@@ -824,7 +824,46 @@ var CORNER_RULES_BIG = {
         { team: "塔勒瑞斯", condition: "home_vs_strong", prob: 0.60, note: "主场vs强队大角率60%" },
         { team: "贝尔格拉诺", condition: "home_vs_weak", prob: 0.67, note: "主场vs弱队大角率67%" },
         { team: "罗萨里奥中央", condition: "away_vs_strong", prob: 0.80, note: "客场vs强队大角率80%" }
-    ]
+    ],
+	// ===== 巴西甲 =====
+"巴西甲": [
+  { team: "帕尔梅拉斯", condition: "away", prob: 0.82, note: "帕尔梅拉斯客场大角率82%" },
+  { team: "巴伊亚", condition: "home", prob: 0.73, note: "巴伊亚主场大角率73%" },
+  { team: "雷莫", condition: "home_vs_strong", prob: 0.83, note: "雷莫主场vs强队大角率83%" },
+  { team: "巴西国际", condition: "away", prob: 0.64, note: "巴西国际客场大角率64%" },
+  { team: "圣保罗", condition: "away", prob: 0.64, note: "圣保罗客场大角率64%" },
+  { team: "桑托斯", condition: "away", prob: 0.64, note: "桑托斯客场大角率64%" },
+  { team: "米拉索", condition: "away", prob: 0.64, note: "米拉索客场大角率64%" },
+  { team: "沙佩科恩斯", condition: "away", prob: 0.64, note: "沙佩科恩斯客场大角率64%" },
+  { team: "巴拉纳竞技", condition: "away_vs_strong", prob: 0.75, note: "巴拉纳竞技客场vs强队大角率75%" },
+  { team: "布拉干蒂诺RB", condition: "away_vs_weak", prob: 0.67, note: "布拉干蒂诺RB客场vs弱队大角率67%" },
+  { team: "科里蒂巴", condition: "away_vs_strong", prob: 0.67, note: "科里蒂巴客场vs强队大角率67%" },
+  { team: "格雷米奥", condition: "home_vs_strong", prob: 0.57, note: "格雷米奥主场vs强队大角率57%" },
+  { team: "瓦斯科达伽马", condition: "home_vs_strong", prob: 0.50, note: "瓦斯科达伽马主场vs强队大角率50%" },
+  { team: "弗鲁米嫩塞", condition: "home_vs_strong", prob: 0.67, note: "弗鲁米嫩塞主场vs强队大角率67%" }
+],
+// ===== MLS（美职联）=====
+"MLS": [
+  // 主场大角型（主场任何对手）
+  { team: "新英格兰革命", condition: "home", prob: 0.78, note: "新英格兰主场大角率78%" },
+  { team: "辛辛那提", condition: "home", prob: 0.78, note: "辛辛那提主场大角率78%" },
+  { team: "纳什维尔", condition: "home", prob: 0.78, note: "纳什维尔主场大角率78%" },
+  { team: "圣何塞地震", condition: "home", prob: 0.78, note: "圣何塞主场大角率78%" },
+  { team: "西雅图海湾人", condition: "home", prob: 0.75, note: "西雅图主场大角率75%" },
+  { team: "洛杉矶FC", condition: "home", prob: 0.67, note: "洛杉矶FC主场大角率67%" },
+  { team: "华盛顿联", condition: "home", prob: 0.67, note: "华盛顿联主场大角率67%" },
+  // 对强队大角型
+  { team: "迈阿密国际", condition: "vs_strong", prob: 0.89, note: "迈阿密对强队大角率89%" },
+  { team: "多伦多", condition: "vs_strong", prob: 0.73, note: "多伦多对强队大角率73%" },
+  { team: "波特兰伐木工", condition: "vs_strong", prob: 0.70, note: "波特兰对强队大角率70%" },
+  // 客场强队大角
+  { team: "皇家盐湖城", condition: "away_vs_strong", prob: 0.80, note: "皇家盐湖城客场vs强队大角率80%" },
+  { team: "达拉斯", condition: "away_vs_strong", prob: 0.71, note: "达拉斯客场vs强队大角率71%" },
+  // 主场弱队大角（条件型）
+  { team: "科罗拉多急流", condition: "home_vs_weak", prob: 1.0, note: "科罗拉多主场vs弱队100%大角" },
+  { team: "纽约红牛", condition: "home_vs_weak", prob: 0.75, note: "纽约红牛主场vs弱队大角率75%" },
+  { team: "圣地亚哥", condition: "home_vs_strong", prob: 0.80, note: "圣地亚哥主场vs强队大角率80%" }
+]
 };
 
 // 无脑小角规则（方向：小角）
@@ -858,7 +897,39 @@ var CORNER_RULES_SMALL = {
         { team: "科尔多瓦中央", condition: "away", prob: 0.89, note: "客场89%小角" },
         { team: "圣洛伦索", condition: "away_vs_weak", prob: 0.86, note: "客场vs弱队86%小角" },
         { team: "普拉滕斯", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" }
-    ]
+    ],
+// ===== 巴西甲 =====
+"巴西甲": [
+  { team: "博塔弗戈", condition: "away", prob: 1.0, note: "博塔弗戈客场0%大角=无脑小角" },
+  { team: "维多利亚", condition: "home", prob: 0.82, note: "维多利亚主场大角率18%=小角" },
+  { team: "科林蒂安", condition: "any", prob: 0.75, note: "科林蒂安任何比赛75%小角" },
+  { team: "米内罗竞技", condition: "away_vs_weak", prob: 1.0, note: "米内罗竞技客场vs弱队0%大角" },
+  { team: "克鲁塞罗", condition: "home_vs_weak", prob: 0.75, note: "克鲁塞罗主场vs弱队75%小角" },
+  { team: "布拉干蒂诺RB", condition: "home_vs_weak", prob: 0.67, note: "布拉干蒂诺RB主场vs弱队67%小角" },
+  { team: "沙佩科恩斯", condition: "home_vs_weak", prob: 0.67, note: "沙佩科恩斯主场vs弱队67%小角" },
+  { team: "米拉索", condition: "home_vs_weak", prob: 0.67, note: "米拉索主场vs弱队67%小角" },
+  { team: "科里蒂巴", condition: "home_vs_weak", prob: 0.67, note: "科里蒂巴主场vs弱队67%小角" }
+],
+// ===== MLS（美职联）=====
+"MLS": [
+  // 全场小角之王
+  { team: "纽约城", condition: "any", prob: 0.78, note: "纽约城任何场景小角率78%" },
+  // 主场极端小角
+  { team: "哥伦布机员", condition: "home", prob: 0.89, note: "哥伦布主场小角率89%" },
+  // 客场极端小角
+  { team: "费城联合", condition: "away", prob: 0.89, note: "费城客场小角率89%" },
+  { team: "科罗拉多急流", condition: "away", prob: 0.89, note: "科罗拉多客场小角率89%" },
+  // 客场小角
+  { team: "温哥华白浪", condition: "away", prob: 0.75, note: "温哥华客场小角率75%" },
+  { team: "夏洛特", condition: "away", prob: 0.78, note: "夏洛特客场小角率78%" },
+  { team: "休斯顿迪纳摩", condition: "away", prob: 0.78, note: "休斯顿客场小角率78%" },
+  // 对弱队极端小角
+  { team: "奥斯汀", condition: "vs_weak", prob: 0.89, note: "奥斯汀对弱队小角率89%" },
+  // 主场小角
+  { team: "堪萨斯城", condition: "home", prob: 0.78, note: "堪萨斯城主場小角率78%" },
+  // 客场强队小角
+  { team: "奥兰多城", condition: "away_vs_strong", prob: 0.83, note: "奥兰多客场vs强队小角率83%" }
+]
 };
 
 // 半场0-0小角规则
