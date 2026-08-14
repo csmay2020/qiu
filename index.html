@@ -384,6 +384,7 @@ var TEAM_NAME_MAP = {
 
   // ===== 瑞典甲 =====
   "尤尔加登": "Djurgården",
+  "佐加顿斯": "Djurgården",
   "哈马比": "Hammarby",
   "哥德堡": "IFK Göteborg",
   "赫根": "Häcken",
@@ -398,6 +399,7 @@ var TEAM_NAME_MAP = {
   "厄尔格里特": "Örgryte",
   "埃尔夫斯堡": "Elfsborg",
   "哈尔姆斯塔德": "Halmstad",
+  "索尔纳": "AIK",
 
   // ===== 挪超 =====
   "博德闪耀": "Bodø/Glimt",
@@ -415,6 +417,7 @@ var TEAM_NAME_MAP = {
   "克里斯蒂安松": "Kristiansund",
   "汉坎": "HamKam",
   "斯塔特": "Start",
+  "奥斯陆": "KFUM",
 
   // ===== 阿根廷甲 =====
   "河床": "River Plate",
@@ -874,7 +877,7 @@ var CORNER_RULES_SMALL = {
         { team: "埃尔夫斯堡", condition: "away", prob: 0.75, note: "客场小角率75%" },
         { team: "哈马比", condition: "derby", prob: 1.0, note: "德比战100%小角" },
         { team: "卡尔马", condition: "home_vs_strong", prob: 1.0, note: "主场vs强队100%小角" },
-        { team: "索尔纳", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
+        { team: "AIK", condition: "home_vs_weak", prob: 1.0, note: "主场vs弱队100%小角" },
         { team: "奥尔格里特", condition: "home", prob: 0.67, note: "主场小角率67%" },
         { team: "米亚尔比", condition: "away", prob: 0.80, note: "客场小角率80%" },
 	{ team: "米亚尔比", condition: "home", prob: 0.60, note: "米亚尔比主场小角倾向" }
@@ -1017,6 +1020,165 @@ var TEAM_CORNER_PROFILES = {
     "国防与司法": { league: "阿根廷甲", avg: 7.86, big_rate: 0.190, home_avg: 7.20, away_avg: 8.50, style: "主场防守", note: "主场角球坟墓" },
     "巴拉卡斯中央": { league: "阿根廷甲", avg: 6.95, big_rate: 0.091, home_avg: 5.80, away_avg: 7.60, style: "全联赛小角", note: "无脑小角王" }
 };
+
+// =====================================================================
+// ★★★ 五大联赛完整高置信度规则（基于完整赛季报告提炼）★★★
+// =====================================================================
+
+// ===== 大角规则 =====
+var EXTRA_RULES_BIG = {
+  // ===== 英超 =====
+  "英超": [
+    { team: "利物浦", condition: "away", prob: 0.77, note: "利物浦客场大角率76.5%，英超客场龙" },
+    { team: "曼城", condition: "home_vs_weak", prob: 0.58, note: "曼城主场vs弱队大角率58%" },
+    { team: "阿森纳", condition: "away_vs_midfield", prob: 0.67, note: "阿森纳客场vs绞杀型大角率67%" },
+    { team: "热刺", condition: "home_vs_mid", prob: 0.58, note: "热刺主场vs中游大角率58%" },
+    { team: "纽卡斯尔", condition: "home_vs_strong", prob: 1.0, note: "纽卡斯尔主场vs强队100%大角" },
+    { team: "布伦特福德", condition: "home_vs_strong", prob: 0.60, note: "布伦特福德主场vs强队大角" }
+  ],
+  // ===== 西甲 =====
+  "西甲": [
+    { team: "巴萨", condition: "away_vs_open", prob: 0.90, note: "巴萨客场vs开放型大角率90%" },
+    { team: "皇马", condition: "away", prob: 0.74, note: "皇马客场大角率73.7%，客场龙" },
+    { team: "马竞", condition: "away_vs_open", prob: 0.88, note: "马竞客场vs开放型大角率87.5%" },
+    { team: "莱万特", condition: "home_vs_weak", prob: 0.58, note: "莱万特主场vs弱队大角率58%" },
+    { team: "皇家社会", condition: "away_vs_open", prob: 0.63, note: "皇家社会客场vs开放型大角率63.2%" },
+    { team: "比利亚雷亚尔", condition: "home_vs_mid", prob: 0.58, note: "比利亚雷亚尔主场vs中游大角率58%" }
+  ],
+  // ===== 意甲 =====
+  "意甲": [
+    { team: "亚特兰大", condition: "home", prob: 0.84, note: "亚特兰大主场84.2%大角，五大联赛最稳主场大角" },
+    { team: "国际米兰", condition: "home_vs_weak", prob: 0.68, note: "国米主场vs弱队大角率68%" },
+    { team: "乌迪内斯", condition: "away_vs_strong", prob: 0.53, note: "乌迪内斯客场vs强队大角率53%" },
+    { team: "科莫", condition: "home_vs_weak", prob: 0.58, note: "科莫主场vs保级队大角率58%" },
+    { team: "都灵", condition: "away_vs_AC米兰", prob: 0.60, note: "都灵客场vsAC米兰大角" }
+  ],
+  // ===== 德甲 =====
+  "德甲": [
+    { team: "拜仁", condition: "home_vs_weak", prob: 0.71, note: "拜仁主场vs弱队大角率70.6%" },
+    { team: "多特蒙德", condition: "home_vs_mid", prob: 0.71, note: "多特蒙德主场vs中游大角率70.6%" },
+    { team: "RB莱比锡", condition: "home_vs_mid", prob: 0.65, note: "RB莱比锡主场vs中游大角率64.7%" },
+    { team: "勒沃库森", condition: "away_vs_strong", prob: 0.47, note: "勒沃库森客场vs强队大角率47%" },
+    { team: "霍芬海姆", condition: "home_vs_weak", prob: 0.59, note: "霍芬海姆主场vs弱队大角率59%" }
+  ],
+  // ===== 法甲 =====
+  "法甲": [
+    { team: "巴黎圣日耳曼", condition: "home_vs_weak", prob: 0.65, note: "巴黎主场vs弱队大角率64.7%" },
+    { team: "里昂", condition: "home_vs_mid", prob: 0.65, note: "里昂主场vs中游大角率64.7%" },
+    { team: "朗斯", condition: "home_vs_strong", prob: 0.59, note: "朗斯主场vs强队大角率58.8%" },
+    { team: "雷恩", condition: "away_vs_mid", prob: 0.53, note: "雷恩客场vs中游大角率52.9%" }
+  ]
+};
+
+// ===== 小角规则 =====
+var EXTRA_RULES_SMALL = {
+  // ===== 英超 =====
+  "英超": [
+    { team: "阿森纳", condition: "home_vs_defensive", prob: 0.88, note: "阿森纳主场vs铁桶阵小角率88%" },
+    { team: "切尔西", condition: "away_vs_strong", prob: 0.84, note: "切尔西客场vs强队小角率84%" },
+    { team: "利兹联", condition: "away", prob: 0.84, note: "利兹联客场小角率84%" },
+    { team: "埃弗顿", condition: "away_vs_weak", prob: 0.68, note: "埃弗顿客场vs保级队小角率68%" },
+    { team: "桑德兰", condition: "home_vs_weak", prob: 0.70, note: "桑德兰主场vs保级队小角率70%" }
+  ],
+  // ===== 西甲 =====
+  "西甲": [
+    { team: "赫塔菲", condition: "any", prob: 0.76, note: "赫塔菲任何场地76.3%小角，西甲小角之王" },
+    { team: "瓦伦西亚", condition: "home", prob: 0.58, note: "瓦伦西亚主场42.1%大角=57.9%小角" },
+    { team: "塞尔塔", condition: "home", prob: 0.63, note: "塞尔塔主场36.8%大角=63.2%小角" },
+    { team: "西班牙人", condition: "home_vs_strong", prob: 1.0, note: "西班牙人主场vs马竞仅4角" },
+    { team: "埃尔切", condition: "home_vs_weak", prob: 1.0, note: "埃尔切主场vs赫塔菲仅4角" },
+    { team: "奥萨苏纳", condition: "home_vs_weak", prob: 0.68, note: "奥萨苏纳主场vs弱队小角率68%" }
+  ],
+  // ===== 意甲 =====
+  "意甲": [
+    { team: "克雷莫纳", condition: "any", prob: 0.74, note: "克雷莫纳任何场地小角率73.7%" },
+    { team: "卡利亚里", condition: "away_vs_那不勒斯", prob: 1.0, note: "卡利亚里客场vs那不勒斯0角" },
+    { team: "国际米兰", condition: "away_vs_尤文图斯", prob: 1.0, note: "国米客场vs尤文仅5角" },
+    { team: "AC米兰", condition: "away_vs_尤文图斯", prob: 1.0, note: "AC米兰客场vs尤文仅4角" },
+    { team: "萨索洛", condition: "away_vs_strong", prob: 0.74, note: "萨索洛客场vs强队小角率74%" }
+  ],
+  // ===== 德甲 =====
+  "德甲": [
+    { team: "云达不莱梅", condition: "home_vs_RB莱比锡", prob: 1.0, note: "不莱梅主场vs莱比锡仅1角" },
+    { team: "门兴", condition: "home_vs_strong", prob: 0.76, note: "门兴主场vs强队小角率76%" },
+    { team: "弗赖堡", condition: "home_vs_weak", prob: 0.71, note: "弗赖堡主场vs弱队小角率71%" },
+    { team: "奥格斯堡", condition: "away_vs_strong", prob: 0.71, note: "奥格斯堡客场vs强队小角率71%" }
+  ],
+  // ===== 法甲 =====
+  "法甲": [
+    { team: "勒阿弗尔", condition: "any", prob: 0.76, note: "勒阿弗尔任何场地小角率76.5%" },
+    { team: "昂热", condition: "any", prob: 0.71, note: "昂热任何场地小角率70.6%" },
+    { team: "马赛", condition: "home_vs_巴黎圣日耳曼", prob: 1.0, note: "马赛主场vs巴黎仅7角" },
+    { team: "巴黎FC", condition: "away_vs_巴黎圣日耳曼", prob: 1.0, note: "巴黎FC客场vs巴黎仅6角" }
+  ]
+};
+
+var SPECIAL_MATCHUP_RULES = {
+  "西甲": [
+    // 大角
+    { home: "Barcelona", away: "Real Madrid", direction: "大角", prob: 1.0, note: "巴萨vs皇马100%大角" },
+    { home: "Barcelona", away: "Real Sociedad", direction: "大角", prob: 1.0, note: "巴萨vs社会100%大角" },
+    { home: "Barcelona", away: "Girona", direction: "大角", prob: 1.0, note: "巴萨vs赫罗纳100%大角" },
+    { home: "Levante", away: "Atletico Madrid", direction: "大角", prob: 1.0, note: "莱万特vs马竞100%大角" },
+    { home: "Levante", away: "Barcelona", direction: "大角", prob: 1.0, note: "莱万特vs巴萨100%大角" },
+    // 小角
+    { home: "Real Madrid", away: "Atletico Madrid", direction: "小角", prob: 1.0, note: "马德里德比100%小角" },
+    { home: "Real Madrid", away: "Athletic Bilbao", direction: "小角", prob: 1.0, note: "皇马vs毕尔巴鄂主场小角" },
+    { home: "Barcelona", away: "Getafe", direction: "小角", prob: 1.0, note: "巴萨vs赫塔菲主场小角" },
+    { home: "Barcelona", away: "Villarreal", direction: "小角", prob: 1.0, note: "巴萨vs比利亚雷亚尔主场小角" }
+  ],
+  // 以下英超/意甲/德甲/法甲配对均来自各联赛报告"五、极端标的汇总"章节
+  // ★ 注意：绝大部分为单场(1场)历史样本，样本量极小，置信度低于西甲条目，note中已注明
+  "英超": [
+    // 大角
+    { home: "纽卡斯尔联", away: "阿森纳", direction: "大角", prob: 1.0, note: "纽卡vs阿森纳100%大角(1场19角，样本极小)" },
+    { home: "纽卡斯尔联", away: "热刺", direction: "大角", prob: 1.0, note: "纽卡vs热刺100%大角(1场19角，样本极小)" },
+    { home: "伯恩利", away: "利物浦", direction: "大角", prob: 1.0, note: "伯恩利vs利物浦100%大角(1场14角，样本极小)" },
+    { home: "曼城", away: "埃弗顿", direction: "大角", prob: 1.0, note: "曼城vs埃弗顿100%大角(1场14角，样本极小)" },
+    { home: "热刺", away: "狼队", direction: "大角", prob: 1.0, note: "热刺vs狼队100%大角(1场19角，样本极小)" },
+    { home: "热刺", away: "利兹联", direction: "大角", prob: 1.0, note: "热刺vs利兹联100%大角(1场16角，样本极小)" },
+    // 小角
+    { home: "伯恩茅斯", away: "纽卡斯尔联", direction: "小角", prob: 1.0, note: "伯恩茅斯vs纽卡100%小角(1场5角，样本极小)" },
+    { home: "布莱顿", away: "曼联", direction: "小角", prob: 1.0, note: "布莱顿vs曼联100%小角(1场3角，样本极小)" },
+    { home: "水晶宫", away: "曼城", direction: "小角", prob: 1.0, note: "水晶宫vs曼城100%小角(1场4角，样本极小)" },
+    { home: "利物浦", away: "切尔西", direction: "小角", prob: 1.0, note: "利物浦vs切尔西100%小角(1场7角，样本极小)" },
+    { home: "布伦特福德", away: "利兹联", direction: "小角", prob: 1.0, note: "布伦特福德vs利兹联100%小角(1场3角，样本极小)" },
+    { home: "伯恩利", away: "桑德兰", direction: "小角", prob: 1.0, note: "伯恩利vs桑德兰100%小角(1场7角，样本极小)" }
+  ],
+  "意甲": [
+    { home: "那不勒斯", away: "卡利亚里", direction: "小角", prob: 1.0, note: "那不勒斯vs卡利亚里100%小角(1场0角，样本极小)" },
+    { home: "都灵", away: "亚特兰大", direction: "小角", prob: 1.0, note: "都灵vs亚特兰大100%小角(1场1角，样本极小)" },
+    { home: "国际米兰", away: "科莫", direction: "小角", prob: 1.0, note: "国米vs科莫100%小角(1场2角，样本极小)" },
+    { home: "尤文图斯", away: "国际米兰", direction: "小角", prob: 1.0, note: "尤文vs国米100%小角(1场5角，样本极小)" },
+    { home: "尤文图斯", away: "AC米兰", direction: "小角", prob: 1.0, note: "尤文vsAC米兰100%小角(1场4角，样本极小)" }
+  ],
+  "德甲": [
+    { home: "云达不莱梅", away: "RB莱比锡", direction: "小角", prob: 1.0, note: "不莱梅vs莱比锡100%小角(1场1角，样本极小)" },
+    { home: "门兴", away: "勒沃库森", direction: "小角", prob: 1.0, note: "门兴vs勒沃库森100%小角(1场4角，样本极小)" },
+    { home: "拜仁", away: "多特", direction: "小角", prob: 1.0, note: "拜仁vs多特100%小角(1场7角，样本极小)" },
+    { home: "弗赖堡", away: "汉堡", direction: "小角", prob: 1.0, note: "弗赖堡vs汉堡100%小角(1场3角，样本极小)" },
+    { home: "科隆", away: "勒沃库森", direction: "小角", prob: 1.0, note: "科隆vs勒沃库森100%小角(1场7角，样本极小)" }
+  ],
+  "法甲": [
+    { home: "朗斯", away: "里尔", direction: "大角", prob: 1.0, note: "朗斯vs里尔100%大角(1场14角，样本极小)" },
+    { home: "马赛", away: "巴黎圣日耳曼", direction: "小角", prob: 1.0, note: "马赛vs巴黎圣日耳曼100%小角(1场7角，样本极小)" },
+    { home: "巴黎圣日耳曼", away: "巴黎FC", direction: "小角", prob: 1.0, note: "大巴黎vs巴黎FC100%小角(1场6角，样本极小)" },
+    { home: "巴黎圣日耳曼", away: "尼斯", direction: "小角", prob: 1.0, note: "大巴黎vs尼斯100%小角(1场7角，样本极小)" },
+    { home: "勒阿弗尔", away: "巴黎圣日耳曼", direction: "小角", prob: 1.0, note: "勒阿弗尔vs大巴黎100%小角(1场6角，样本极小)" }
+  ]
+};
+
+function querySpecialMatchup(league, home, away, homeNorm, awayNorm) {
+  var rules = SPECIAL_MATCHUP_RULES[league];
+  if (!rules) return null;
+  for (var i = 0; i < rules.length; i++) {
+    var r = rules[i];
+    var homeMatch = (r.home === home || r.home === homeNorm);
+    var awayMatch = (r.away === away || r.away === awayNorm);
+    if (homeMatch && awayMatch) return r;
+  }
+  return null;
+}
 
 // =====================================================================
 // ★★★ 角球规则查询函数 ★★★
@@ -1253,7 +1415,7 @@ var CORNER_RULES_SMALL = {
     { team: "埃尔夫斯堡", condition: "away", prob: 0.75, note: "埃尔夫斯堡客场小角75%" },
     { team: "哈马比", condition: "derby", prob: 1.0, note: "哈马比德比战100%小角" },
     { team: "卡尔马", condition: "home_vs_strong", prob: 1.0, note: "卡尔马主场vs强队100%小角" },
-    { team: "索尔纳", condition: "home_vs_weak", prob: 1.0, note: "索尔纳主场vs弱队100%小角" }
+    { team: "AIK", condition: "home_vs_weak", prob: 1.0, note: "索尔纳主场vs弱队100%小角" }
   ],
   "挪超": [
     { team: "斯达", condition: "home", prob: 0.875, note: "斯达主场87.5%小角" },
@@ -1343,13 +1505,122 @@ function filterMatch(league, home, away) {
     return result;
   }
 
-  // ★ 新增：德比战检测（瑞超斯德哥尔摩德比）
-  var derbyTeams = ['佐加顿斯', 'AIK索尔纳', '哈马比', '索尔纳'];
-  var isDerby = (derbyTeams.indexOf(homeNorm) !== -1 && derbyTeams.indexOf(awayNorm) !== -1);
-  if (isDerby && league === '瑞超') {
+  // ★ 特定对阵配对规则（最高优先级：明确点名的两队对阵，来自各联赛报告"极端标的汇总"）
+  var specialMatch = querySpecialMatchup(league, home, away, homeNorm, awayNorm);
+  if (specialMatch) {
+    result.direction = specialMatch.direction;
+    result.confidence = specialMatch.prob || 0.80;
+    result.reason = specialMatch.note;
+    result.priority = 1;
+    return result;
+  }
+
+
+
+  // ★ 德比战检测（瑞超斯德哥尔摩德比 + 通用德比）
+  var derbyPairs = [
+    ['佐加顿斯', 'AIK'], ['佐加顿斯', '哈马比'], ['哈马比', 'AIK'],
+    ['皇马', '马竞'], ['巴萨', '西班牙人'], ['AC米兰', '国际米兰'], ['利物浦', '埃弗顿']
+  ];
+  var isDerby = false;
+  for (var d = 0; d < derbyPairs.length; d++) {
+    // 把配对表里的名字也标准化一遍，这样"佐加顿斯"和它的别名"尤尔加登"都能对上
+    var dA = normalizeTeamNameForFilter(derbyPairs[d][0], league);
+    var dB = normalizeTeamNameForFilter(derbyPairs[d][1], league);
+    if ((homeNorm === dA && awayNorm === dB) || (homeNorm === dB && awayNorm === dA)) {
+      isDerby = true;
+      break;
+    }
+  }
+  if (isDerby) {
     result.direction = '小角';
-    result.confidence = 0.85;
-    result.reason = '斯德哥尔摩德比，历史规律小角';
+    result.confidence = 0.80;
+    result.reason = '德比战历史规律小角';
+    result.priority = 1;
+    return result;
+  }
+  
+   // ★ 跨队特殊规则（对阵锁定）
+  var specialRules = SPECIAL_MATCHUP_RULES[league] || [];
+  for (var s = 0; s < specialRules.length; s++) {
+    var sr = specialRules[s];
+    if (sr.home === homeNorm && sr.away === awayNorm) {
+      result.direction = sr.direction;
+      result.confidence = sr.prob || 0.85;
+      result.reason = sr.note;
+      result.priority = 1;
+      return result;
+    }
+  }
+  // ★ 跨联赛场景规则（强强对话）
+  // 注意：需要知道双方排名才能判断是否为强强对话，这里简化为检测“主场大角”场景
+  var homeProfile = TEAM_CORNER_PROFILES[homeNorm] || TEAM_CORNER_PROFILES[home];
+  var awayProfile = TEAM_CORNER_PROFILES[awayNorm] || TEAM_CORNER_PROFILES[away];
+  
+  // 如果主队是主场大角型球队（home_avg 高），且联赛属于主场大角联赛
+  var sceneResult = queryLeagueSceneRules(league, '主场大角');
+  if (sceneResult && homeProfile && homeProfile.home_avg && homeProfile.home_avg >= 10.0) {
+    result.direction = sceneResult.direction;
+    result.confidence = sceneResult.confidence || 0.75;
+    result.reason = sceneResult.note + '（主队主场场均' + homeProfile.home_avg.toFixed(1) + '角）';
+    result.priority = 1;
+    return result;
+  }
+
+  // ★ 先检查单队大角/小角补充规则（EXTRA_RULES）
+  // 这个可以合并到主循环里，但为了清晰，单独检查
+  var extraBig = EXTRA_RULES_BIG[league] || [];
+  for (var e = 0; e < extraBig.length; e++) {
+    var er = extraBig[e];
+    if (er.team === homeNorm || er.team === home) {
+      if (er.condition === 'any' || er.condition === 'home' || er.condition === 'home_vs_weak' || er.condition === 'home_vs_mid' || er.condition === 'home_vs_strong' || er.condition === 'away' || er.condition === 'away_vs_open' || er.condition === 'away_vs_midfield' || er.condition === 'away_vs_strong' || er.condition === 'away_vs_AC米兰' || er.condition === 'away_vs_mid') {
+        result.direction = '大角';
+        result.confidence = er.prob || 0.60;
+        result.reason = er.note;
+        result.priority = 1;
+        return result;
+      }
+    }
+    if (er.team === awayNorm || er.team === away) {
+      if (er.condition === 'any' || er.condition === 'away' || er.condition === 'away_vs_open' || er.condition === 'away_vs_midfield' || er.condition === 'away_vs_strong' || er.condition === 'away_vs_AC米兰' || er.condition === 'away_vs_mid') {
+        result.direction = '大角';
+        result.confidence = er.prob || 0.60;
+        result.reason = er.note;
+        result.priority = 1;
+        return result;
+      }
+    }
+  }
+
+  var extraSmall = EXTRA_RULES_SMALL[league] || [];
+  for (var e2 = 0; e2 < extraSmall.length; e2++) {
+    var er2 = extraSmall[e2];
+    if (er2.team === homeNorm || er2.team === home) {
+      if (er2.condition === 'any' || er2.condition === 'home' || er2.condition === 'home_vs_weak' || er2.condition === 'home_vs_defensive' || er2.condition === 'home_vs_strong' || er2.condition === 'away' || er2.condition === 'away_vs_strong' || er2.condition === 'away_vs_weak' || er2.condition === 'away_vs_那不勒斯' || er2.condition === 'away_vs_尤文图斯' || er2.condition === 'home_vs_RB莱比锡' || er2.condition === 'home_vs_巴黎圣日耳曼' || er2.condition === 'away_vs_巴黎圣日耳曼') {
+        result.direction = '小角';
+        result.confidence = er2.prob || 0.70;
+        result.reason = er2.note;
+        result.priority = 1;
+        return result;
+      }
+    }
+    if (er2.team === awayNorm || er2.team === away) {
+      if (er2.condition === 'any' || er2.condition === 'away' || er2.condition === 'away_vs_strong' || er2.condition === 'away_vs_weak' || er2.condition === 'away_vs_那不勒斯' || er2.condition === 'away_vs_尤文图斯' || er2.condition === 'away_vs_巴黎圣日耳曼') {
+        result.direction = '小角';
+        result.confidence = er2.prob || 0.70;
+        result.reason = er2.note;
+        result.priority = 1;
+        return result;
+      }
+    }
+  }
+
+  // ★ 被碾压型大角（弱队客场 vs 超级强队）
+  var underdogResult = queryUnderdogRule(league, home, away);
+  if (underdogResult) {
+    result.direction = underdogResult.direction;
+    result.confidence = underdogResult.confidence || 0.85;
+    result.reason = underdogResult.note;
     result.priority = 1;
     return result;
   }
@@ -1363,9 +1634,7 @@ function filterMatch(league, home, away) {
     var rule = bigRules[i];
     if (rule.team === homeNorm || rule.team === home) {
       if (rule.condition === 'any' || rule.condition === 'home' || rule.condition === 'home_vs_weak' || rule.condition === 'home_vs_strong' || rule.condition === 'vs_strong') {
-        // ★ 检查“主场vs弱队”规则是否真的适用
         if (rule.condition === 'home_vs_weak') {
-          // 检查客队是否有小角规则（如果是小角队，说明不是弱队，这条规则不适用）
           var awayHasSmallRule = false;
           var smallCheck = CORNER_RULES_SMALL[league] || [];
           for (var sc = 0; sc < smallCheck.length; sc++) {
@@ -1374,9 +1643,7 @@ function filterMatch(league, home, away) {
               break;
             }
           }
-          if (awayHasSmallRule) {
-            continue; // 跳过这条大角规则，因为客队不是真正的弱队
-          }
+          if (awayHasSmallRule) continue;
         }
         matchedBig.push(rule);
       }
@@ -1403,9 +1670,8 @@ function filterMatch(league, home, away) {
     }
   }
 
-  // ★ 核心修改：规则冲突检测
+  // ★ 规则冲突检测
   if (matchedBig.length > 0 && matchedSmall.length > 0) {
-    // 冲突：同时有大角和小角规则 → 输出观望
     result.direction = '观望';
     result.confidence = 0;
     result.reason = '规则冲突：' + matchedBig[0].note + ' vs ' + matchedSmall[0].note + '，建议等半场';
@@ -1413,7 +1679,6 @@ function filterMatch(league, home, away) {
     return result;
   }
 
-  // 只有大角规则
   if (matchedBig.length > 0) {
     var bestBig = matchedBig[0];
     result.direction = '大角';
@@ -1423,7 +1688,6 @@ function filterMatch(league, home, away) {
     return result;
   }
 
-  // 只有小角规则
   if (matchedSmall.length > 0) {
     var bestSmall = matchedSmall[0];
     result.direction = '小角';
@@ -1437,6 +1701,70 @@ function filterMatch(league, home, away) {
   result.reason = '无极端信号，建议等半场数据';
   return result;
 }
+
+// =====================================================================
+// ★★★ 被碾压规则 + 跨联赛场景规则（补充）★★★
+// =====================================================================
+
+var UNDERDOG_BIG_RULES = {
+  "英超": [
+    { weak: "科隆", strong: "多特蒙德", prob: 1.0, note: "科隆客场vs多特19角" }
+  ],
+  "德甲": [
+    { weak: "朗斯", strong: "里昂", prob: 1.0, note: "朗斯客场vs里昂28角" }
+  ],
+  "意甲": [
+    { weak: "博洛尼亚", strong: "克雷莫纳", prob: 1.0, note: "博洛尼亚客场vs克雷莫纳21角" }
+  ]
+};
+
+function queryUnderdogRule(league, homeTeam, awayTeam) {
+  var rules = UNDERDOG_BIG_RULES[league] || [];
+  var homeNorm = normalizeTeamNameForFilter(homeTeam, league);
+  var awayNorm = normalizeTeamNameForFilter(awayTeam, league);
+  for (var i = 0; i < rules.length; i++) {
+    var r = rules[i];
+    if (r.weak === awayNorm && r.strong === homeNorm) {
+      return {
+        direction: '大角',
+        confidence: r.prob || 0.85,
+        note: r.note,
+        priority: 1
+      };
+    }
+  }
+  return null;
+}
+
+// =====================================================================
+// ★★★ 跨联赛场景规则（强强对话 / 主场大角联赛）★★★
+// =====================================================================
+
+var LEAGUE_SCENE_RULES = {
+  "强强对话": {
+    "英超": { direction: "大角", note: "英超强强对话出大角" },
+    "德甲": { direction: "大角", note: "德甲强强对话出大角" },
+    "意甲": { direction: "小角", note: "意甲强强对话出小角" },
+    "法甲": { direction: "小角", note: "法甲强强对话出小角" }
+  },
+  "主场大角": {
+    "德甲": { direction: "大角", note: "德甲强队主场大角率>64%" },
+    "意甲": { direction: "大角", note: "意甲亚特兰大主场84.2%" }
+  }
+};
+
+function queryLeagueSceneRules(league, sceneType) {
+  var scene = LEAGUE_SCENE_RULES[sceneType];
+  if (!scene) return null;
+  var rule = scene[league];
+  if (!rule) return null;
+  return {
+    direction: rule.direction,
+    note: rule.note,
+    confidence: 0.75
+  };
+}
+
 function filterSchedule(text) {
   var matches = parseSchedule(text);
   var results = [];
