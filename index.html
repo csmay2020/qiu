@@ -1917,7 +1917,7 @@ function calculateConfidence(r, home, away, league, context, cornerLookup) {
 // =====================================================================
 // ★★★ 核心校验函数（增强版）★★★
 // =====================================================================
-function validateAndFixScore(r, context) {
+function validateAndFixScore(r, context, cornerLookup) {
   if (!r) return r;
 
   var fixed = false;
@@ -1998,8 +1998,8 @@ function validateAndFixScore(r, context) {
   var home = getField('home');
   var away = getField('away');
   if (!r.corners) r.corners = {};
-  
-  var cornerLookup = lookupCorners(league, home, away);
+
+  // cornerLookup 由调用方从 CornerEngine 异步获取后传入（不再调用同步存根）
   var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
   var dbAway = cornerLookup && cornerLookup.away ? cornerLookup.away.avg : null;
   
@@ -2443,16 +2443,19 @@ async function analyze(){
     var totalCredits = 0;
     var usedEngine = 'Unknown';
 
+    // 始终在两个分支中都获取角球数据（不可缓存，因为 DB 可能随时更新）
+    var cornerLookup = await CornerEngine.lookupCorners(lgCode, home, away);
+
     if (cached && cached.ts && (Date.now() - cached.ts < 86400000)) {
       searchContext = cached.searchContext || '';
-      cornerDataFound = cached.cornerDataFound || false;
+      cornerDataFound = cached.cornerDataFound || !!(cornerLookup && cornerLookup.home && cornerLookup.away);
       totalCredits = 0;
       statusEl.textContent = '📦 使用缓存数据（24小时内有效）';
       console.log('[缓存] 命中，跳过搜索');
     } else {
       statusEl.textContent = '🔎 搜索比赛信息（UnSearch 优先）…';
 
-      var cornerLookup = await CornerEngine.lookupCorners(lgCode, home, away);
+      // cornerLookup 已在上方获取，此处确认状态
       var hasCornerDB = !!(cornerLookup && cornerLookup.home && cornerLookup.away);
 
       var baseQueries = [
@@ -2568,7 +2571,7 @@ async function analyze(){
     r._rawOddsText = finalOddsText;
     
     // ---- ★ 核心后处理校验 ----
-    r = validateAndFixScore(r, params.context);
+    r = validateAndFixScore(r, params.context, params.cornerLookup);
     
     // ---- ★ 强制补全缺失盘口 ----
     r = ensureAllMarkets(r, finalOddsText);
@@ -3374,8 +3377,20 @@ function updateEngineStatus(){
 // =====================================================================
 // ★★★ 渲染联赛选项和比赛情境的独立函数 ★★★
 // =====================================================================
-// 联赛名 → league_code 映射（从 Supabase 加载后填充）
-var LEAGUE_CODE_MAP = {};
+// 联赛名 → league_code 映射（内置兜底 + Supabase 动态覆盖）
+var LEAGUE_CODE_MAP = {
+  '英超': 'premier_league',
+  '西甲': 'la_liga',
+  '意甲': 'serie_a',
+  '德甲': 'bundesliga',
+  '法甲': 'ligue_1',
+  'MLS': 'mls',
+  '墨甲': 'mexico',
+  '巴西甲': 'brazil',
+  '阿根廷甲': 'argentina',
+  '挪超': 'norway',
+  '瑞超': 'sweden'
+};
 var LEAGUES = []; // 从 Supabase 动态加载
 
 async function renderLeaguesAndContext() {
@@ -3385,7 +3400,7 @@ async function renderLeaguesAndContext() {
   try {
     var dbLeagues = await DataLoader.getLeagues();
     LEAGUES = dbLeagues.map(function(l) { return l.league_name; });
-    LEAGUE_CODE_MAP = {};
+    // 合并 DB 结果（保留内置兜底，DB 覆盖同名条目）
     dbLeagues.forEach(function(l) { LEAGUE_CODE_MAP[l.league_name] = l.league_code; });
   } catch(e) {
     console.warn('加载联赛失败，使用默认列表', e);
@@ -3548,6 +3563,8 @@ async function init(){
     localStorage.setItem('supabase_key', this.value);
     window.SUPABASE_ANON_KEY = this.value;
     updateKeyUI();
+    // 重新加载联赛列表和 LEAGUE_CODE_MAP（key 可能在 init 后才填入）
+    if (this.value.length > 20) renderLeaguesAndContext();
   });
   document.getElementById('ds-key-inp').addEventListener('input', function(){
     localStorage.setItem('ds_key', this.value);
