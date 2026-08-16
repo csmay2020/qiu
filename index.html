@@ -1371,6 +1371,7 @@ function buildPrompt(params){
   var searchContext = params.searchContext || '未进行搜索';
   var snapData = params.snapData || null;
   var cornerLookup = params.cornerLookup || null;  // 由 analyze() 预先查好后传入
+    var h2hHistory = params.h2hHistory || [];
   var cornerDBText = '';
   if(!cornerLookup){
     cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请优先使用搜索的角球数据。';
@@ -1383,7 +1384,30 @@ function buildPrompt(params){
     if(cornerLookup.home && cornerLookup.away) lines.push('数据库预期总角球：'+cornerLookup.total.toFixed(1));
     cornerDBText = lines.join('\n');
   }
+    // ---- 历史交锋记录 ----
+  var h2hText = '';
+  if (h2hHistory && h2hHistory.length > 0) {
+    var total = 0, over105 = 0, over95 = 0;
+    h2hHistory.forEach(function(r) {
+      var c = r.actual_corners || 0;
+      total += c;
+      if (c >= 10.5) over105++;
+      if (c >= 9.5) over95++;
+    });
+    var avg = (total / h2hHistory.length).toFixed(1);
+    var recent = h2hHistory.slice(0, 5).map(function(r) { return r.actual_corners || '?'; }).join('、');
+    h2hText = '\n【📋 历史交锋记录（已完赛）】\n';
+    h2hText += '场次：' + h2hHistory.length + '场\n';
+    h2hText += '场均角球：' + avg + '角\n';
+    h2hText += '过10.5角：' + over105 + '/' + h2hHistory.length + '场\n';
+    h2hText += '过9.5角：' + over95 + '/' + h2hHistory.length + '场\n';
+    h2hText += '最近5场角球：' + recent + '\n';
+  } else {
+    h2hText = '\n【📋 历史交锋记录】无历史记录，建议以两队各自场均数据为主。\n';
+  }
 
+  // 把 h2hText 拼到 Prompt 里，放在 cornerDBText 之后，snapContext 之前
+ 
   var snapContext = '';
   var snapshotSignal = null;
   var signalQuantified = null;
@@ -1479,6 +1503,7 @@ ${searchContext}
 ${motivationCaseLib}
 
 ${cornerDBText}
+${h2hText}
 
 【角球数据使用规则】
 - 若数据库和搜索均有数据，优先使用搜索数据
@@ -2457,6 +2482,25 @@ async function analyze(){
 
       // cornerLookup 已在上方获取，此处确认状态
       var hasCornerDB = !!(cornerLookup && cornerLookup.home && cornerLookup.away);
+      
+      // ---- 新增：查历史交锋记录 ----
+let h2hHistory = [];
+try {
+  const { supabaseGet } = SupabaseClient;
+  // 用 REST 方式查 predictions 表
+  const result = await supabaseGet('predictions', {
+    select: 'match_date,home_team,away_team,actual_corners,pred_corners,correct_corners',
+    or: `home_team.eq.${home},away_team.eq.${home},home_team.eq.${away},away_team.eq.${away}`,
+    order: 'match_date.desc',
+    limit: '10'
+  });
+  if (result && result.length > 0) {
+    h2hHistory = result;
+    console.log('[历史交锋] 找到', h2hHistory.length, '条记录');
+  }
+} catch(e) {
+  console.warn('[历史交锋] 查询失败（不影响主流程）', e);
+}
 
       var baseQueries = [
         home + ' vs ' + away + ' head to head',
@@ -2562,7 +2606,8 @@ async function analyze(){
       snapData: snapData,
       currentOdds: currentOdds,
       searchContext: searchContext,
-      cornerLookup: cornerLookup  // 传入已查好的角球数据
+      cornerLookup: cornerLookup,  // 传入已查好的角球数据
+            h2hHistory: h2hHistory
     };
     statusEl.textContent = '🧠 分析中（DeepSeek Pro）…约30-90秒';
     var r = await runAnalysis(params, dsKey);
