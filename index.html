@@ -2460,6 +2460,27 @@ async function analyze(){
     }
     var finalOddsText = ST.oddsMode === 'txt' ? getField('odds') : ocrCombinedText;
 
+    // ---- 获取角球数据（无论缓存） ----
+    var cornerLookup = await CornerEngine.lookupCorners(lgCode, home, away);
+
+    // ---- ★ 查历史交锋记录（无论缓存，始终执行） ----
+    let h2hHistory = [];
+    try {
+      const { supabaseGet } = SupabaseClient;
+      const result = await supabaseGet('predictions', {
+        select: 'match_date,home_team,away_team,actual_corners,pred_corners,correct_corners',
+        or: `home_team.eq.${home},away_team.eq.${home},home_team.eq.${away},away_team.eq.${away}`,
+        order: 'match_date.desc',
+        limit: '10'
+      });
+      if (result && result.length > 0) {
+        h2hHistory = result;
+        console.log('[历史交锋] 找到', h2hHistory.length, '条记录');
+      }
+    } catch(e) {
+      console.warn('[历史交锋] 查询失败（不影响主流程）', e);
+    }
+
     // 缓存
     var cacheKey = 'search_cache_' + ST.league + '_' + home.toLowerCase() + '_' + away.toLowerCase();
     var cached = dbGet(cacheKey);
@@ -2467,9 +2488,6 @@ async function analyze(){
     var cornerDataFound = false;
     var totalCredits = 0;
     var usedEngine = 'Unknown';
-
-    // 始终在两个分支中都获取角球数据（不可缓存，因为 DB 可能随时更新）
-    var cornerLookup = await CornerEngine.lookupCorners(lgCode, home, away);
 
     if (cached && cached.ts && (Date.now() - cached.ts < 86400000)) {
       searchContext = cached.searchContext || '';
@@ -2480,27 +2498,7 @@ async function analyze(){
     } else {
       statusEl.textContent = '🔎 搜索比赛信息（UnSearch 优先）…';
 
-      // cornerLookup 已在上方获取，此处确认状态
       var hasCornerDB = !!(cornerLookup && cornerLookup.home && cornerLookup.away);
-      
-      // ---- 新增：查历史交锋记录 ----
-let h2hHistory = [];
-try {
-  const { supabaseGet } = SupabaseClient;
-  // 用 REST 方式查 predictions 表
-  const result = await supabaseGet('predictions', {
-    select: 'match_date,home_team,away_team,actual_corners,pred_corners,correct_corners',
-    or: `home_team.eq.${home},away_team.eq.${home},home_team.eq.${away},away_team.eq.${away}`,
-    order: 'match_date.desc',
-    limit: '10'
-  });
-  if (result && result.length > 0) {
-    h2hHistory = result;
-    console.log('[历史交锋] 找到', h2hHistory.length, '条记录');
-  }
-} catch(e) {
-  console.warn('[历史交锋] 查询失败（不影响主流程）', e);
-}
 
       var baseQueries = [
         home + ' vs ' + away + ' head to head',
@@ -2606,8 +2604,8 @@ try {
       snapData: snapData,
       currentOdds: currentOdds,
       searchContext: searchContext,
-      cornerLookup: cornerLookup,  // 传入已查好的角球数据
-            h2hHistory: h2hHistory
+      cornerLookup: cornerLookup,
+      h2hHistory: h2hHistory   // ★ 现在一定存在
     };
     statusEl.textContent = '🧠 分析中（DeepSeek Pro）…约30-90秒';
     var r = await runAnalysis(params, dsKey);
