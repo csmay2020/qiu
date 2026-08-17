@@ -533,7 +533,7 @@
     const h = toEntry(homeStats);
     const a = toEntry(awayStats);
 
-    if (h && a) return { home: h, away: a, total: (h.avg || 0) + (a.avg || 0) };
+    if (h && a) return { home: h, away: a, total: ((h.avg || 0) + (a.avg || 0)) / 2 };
     if (h) return { home: h, away: null, total: h.avg || 0 };
     return { home: null, away: a, total: a ? (a.avg || 0) : 0 };
   }
@@ -1377,13 +1377,17 @@ function buildPrompt(params){
     cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请优先使用搜索的角球数据。';
   } else {
     var lines = ['【⚡ 角球数据库（Statz 2026赛季实测）】'];
-    if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均角球：'+cornerLookup.home.avg.toFixed(1));
+    if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均总角球（含双方）：'+cornerLookup.home.avg.toFixed(1));
     else lines.push('主队 '+home+' 未在数据库中');
-    if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均角球：'+cornerLookup.away.avg.toFixed(1));
+    if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均总角球（含双方）：'+cornerLookup.away.avg.toFixed(1));
     else lines.push('客队 '+away+' 未在数据库中');
-    if(cornerLookup.home && cornerLookup.away) lines.push('数据库预期总角球：'+cornerLookup.total.toFixed(1));
+    if(cornerLookup.home && cornerLookup.away) {
+      var avgTotal = (cornerLookup.home.avg + cornerLookup.away.avg) / 2;
+      lines.push('📊 数据库预期总角球（修正）：'+avgTotal.toFixed(1)+'角');
+    }
     cornerDBText = lines.join('\n');
   }
+
     // ---- 历史交锋记录 ----
   var h2hText = '';
   if (h2hHistory && h2hHistory.length > 0) {
@@ -2043,7 +2047,7 @@ function validateAndFixScore(r, context, cornerLookup) {
   var finalTotal = null;
   
   if (dbHome !== null && dbAway !== null) {
-    finalTotal = dbHome + dbAway;
+    finalTotal = (dbHome + dbAway) / 2;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
     r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
     r.corners.note = '数据库预期值（双方均在库）';
