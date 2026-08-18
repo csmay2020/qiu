@@ -1370,25 +1370,32 @@ function buildPrompt(params){
   var home = params.home, away = params.away, kickoff = params.kickoff, oddsText = params.oddsText, league = params.league, context = params.context;
   var searchContext = params.searchContext || '未进行搜索';
   var snapData = params.snapData || null;
-  var cornerLookup = params.cornerLookup || null;  // 由 analyze() 预先查好后传入
-    var h2hHistory = params.h2hHistory || [];
-  var cornerDBText = '';
-  if(!cornerLookup){
-    cornerDBText = '【角球数据库】当前联赛('+league+')暂无内置数据，请优先使用搜索的角球数据。';
-  } else {
-    var lines = ['【⚡ 角球数据库（Statz 2026赛季实测）】'];
-    if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均总角球（含双方）：'+cornerLookup.home.avg.toFixed(1));
-    else lines.push('主队 '+home+' 未在数据库中');
-    if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均总角球（含双方）：'+cornerLookup.away.avg.toFixed(1));
-    else lines.push('客队 '+away+' 未在数据库中');
-    if(cornerLookup.home && cornerLookup.away) {
-      var avgTotal = (cornerLookup.home.avg + cornerLookup.away.avg) / 2;
-      lines.push('📊 数据库预期总角球（修正）：'+avgTotal.toFixed(1)+'角');
-    }
-    cornerDBText = lines.join('\n');
+  var cornerLookup = params.cornerLookup || null;
+  var h2hHistory = params.h2hHistory || [];
+
+  // ---- 搜索内容截断（不超过1000字） ----
+  if (searchContext && searchContext.length > 1000) {
+    searchContext = searchContext.slice(0, 1000) + '\n\n...（搜索内容已截断）';
   }
 
-    // ---- 历史交锋记录 ----
+  // ---- 角球数据库（精简） ----
+  var cornerDBText = '';
+  if(!cornerLookup){
+    cornerDBText = '【角球数据】当前联赛('+league+')暂无内置数据，请优先使用搜索的角球数据。';
+  } else {
+    var lines = ['【角球数据】'];
+    if(cornerLookup.home) lines.push('主队 '+cornerLookup.home.team+' 场均总角球：'+cornerLookup.home.avg.toFixed(1));
+    else lines.push('主队 '+home+' 无数据');
+    if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均总角球：'+cornerLookup.away.avg.toFixed(1));
+    else lines.push('客队 '+away+' 无数据');
+    if(cornerLookup.home && cornerLookup.away) {
+      var avgTotal = (cornerLookup.home.avg + cornerLookup.away.avg) / 2;
+      lines.push('预期总角球：'+avgTotal.toFixed(1)+'角（两队场均取平均，勿相加）');
+    }
+    cornerDBText = lines.join('；');
+  }
+
+  // ---- 历史交锋（精简：只保留最近3场+场均统计） ----
   var h2hText = '';
   if (h2hHistory && h2hHistory.length > 0) {
     var total = 0, over105 = 0, over95 = 0;
@@ -1399,50 +1406,41 @@ function buildPrompt(params){
       if (c >= 9.5) over95++;
     });
     var avg = (total / h2hHistory.length).toFixed(1);
-    var recent = h2hHistory.slice(0, 5).map(function(r) { return r.actual_corners || '?'; }).join('、');
-    h2hText = '\n【📋 历史交锋记录（已完赛）】\n';
-    h2hText += '场次：' + h2hHistory.length + '场\n';
-    h2hText += '场均角球：' + avg + '角\n';
-    h2hText += '过10.5角：' + over105 + '/' + h2hHistory.length + '场\n';
-    h2hText += '过9.5角：' + over95 + '/' + h2hHistory.length + '场\n';
-    h2hText += '最近5场角球：' + recent + '\n';
+    var recent = h2hHistory.slice(0, 3).map(function(r) { return r.actual_corners || '?'; }).join('、');
+    h2hText = '\n【历史交锋】'+h2hHistory.length+'场，场均'+avg+'角，过10.5角'+over105+'/'+h2hHistory.length+'场，过9.5角'+over95+'/'+h2hHistory.length+'场，最近3场：'+recent+'。\n';
   } else {
-    h2hText = '\n【📋 历史交锋记录】无历史记录，建议以两队各自场均数据为主。\n';
+    h2hText = '\n【历史交锋】无历史记录，建议以两队各自场均数据为主。\n';
   }
 
-  // 把 h2hText 拼到 Prompt 里，放在 cornerDBText 之后，snapContext 之前
- 
+  // ---- 快照对比（精简） ----
   var snapContext = '';
   var snapshotSignal = null;
   var signalQuantified = null;
   if(snapData){
-    snapContext = '\n【📸 历史快照对比】\n';
-    snapContext += '初始快照时间: ' + (snapData.ts || '未知') + '\n';
-    snapContext += '初始主胜: ' + snapData.home + ' | 平局: ' + snapData.draw + ' | 客胜: ' + snapData.away + '\n';
-    snapContext += '当前主胜: ' + (params.currentOdds ? params.currentOdds.home : '待提取') + ' | 平局: ' + (params.currentOdds ? params.currentOdds.draw : '待提取') + ' | 客胜: ' + (params.currentOdds ? params.currentOdds.away : '待提取') + '\n';
+    snapContext = '\n【盘口变化】\n';
+    snapContext += '初始: '+snapData.home+'/'+snapData.draw+'/'+snapData.away;
     if(params.currentOdds && params.currentOdds.home){
       var dHome = ((params.currentOdds.home - snapData.home) / snapData.home * 100);
       var dDraw = ((params.currentOdds.draw - snapData.draw) / snapData.draw * 100);
       var dAway = ((params.currentOdds.away - snapData.away) / snapData.away * 100);
-      snapContext += '变化: 主胜 ' + (dHome > 0 ? '+' : '') + dHome.toFixed(1) + '% | 平局 ' + (dDraw > 0 ? '+' : '') + dDraw.toFixed(1) + '% | 客胜 ' + (dAway > 0 ? '+' : '') + dAway.toFixed(1) + '%\n';
+      snapContext += ' → 当前: '+params.currentOdds.home+'/'+params.currentOdds.draw+'/'+params.currentOdds.away;
+      snapContext += ' (主'+dHome.toFixed(0)+'% 平'+dDraw.toFixed(0)+'% 客'+dAway.toFixed(0)+'%)';
       var signals = [];
-      if(dHome < -10) signals.push({type:'home_overheat', msg:'主胜大幅下降（' + Math.abs(dHome).toFixed(0) + '%），市场高度集中主胜，存在过热可能'});
-      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push({type:'draw_lock', msg:'平赔锁定（变化仅' + dDraw.toFixed(1) + '%），庄家平衡筹码信号'});
-      if(dAway > 5) signals.push({type:'away_pushed', msg:'客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估'});
-      if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push({type:'overheat_combo', msg:'⚠️ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估'});
+      if(dHome < -10) signals.push('主胜大幅下降('+Math.abs(dHome).toFixed(0)+'%)，存在过热可能');
+      if(Math.abs(dDraw) < 3 && dHome < -10) signals.push('平赔锁定，庄家平衡筹码信号');
+      if(dAway > 5) signals.push('客胜被推高(+'+dAway.toFixed(0)+'%)，客胜价值可能被低估');
+      if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push('⚠️主胜过热：主胜大幅下降，平赔锁定，客胜上升');
       if(signals.length){
-        snapContext += '信号判断:\n';
-        signals.forEach(function(s){ snapContext += '· ' + s.msg + '\n'; });
-        snapshotSignal = signals;
+        snapContext += '\n信号: '+signals.join('；');
         if(dAway > 20){
           var adjust = Math.min(5, Math.floor(dAway / 10));
-          signalQuantified = '⚠️ 量化信号：客胜赔率被推高' + dAway.toFixed(0) + '%，建议在基础预测上将客胜概率上调 ' + adjust + ' 个百分点（即 +' + adjust + '%），并重新评估客胜方向的Edge。';
-          snapContext += '\n【📊 量化调整建议】\n' + signalQuantified + '\n';
+          signalQuantified = '客胜赔率被推高'+dAway.toFixed(0)+'%，客胜概率上调'+adjust+'个百分点';
+          snapContext += '\n【量化调整】'+signalQuantified;
         }
         if(dHome < -15){
           var adjustHome = Math.min(3, Math.floor(Math.abs(dHome) / 10));
-          signalQuantified = (signalQuantified || '') + '\n⚠️ 量化信号：主胜赔率大幅下降' + Math.abs(dHome).toFixed(0) + '%，市场过热，建议主胜概率下调 ' + adjustHome + ' 个百分点（即 -' + adjustHome + '%），主推方向需重新评估Edge。';
-          snapContext += '\n' + signalQuantified + '\n';
+          signalQuantified = (signalQuantified || '') + '；主胜概率下调'+adjustHome+'个百分点';
+          snapContext += '\n'+signalQuantified;
         }
       }
     }
@@ -1491,7 +1489,9 @@ function buildPrompt(params){
 - over25 概率强制设为 ≤ 50%
 `;
 
-  return `你是足球盘口价值分析引擎,服务理性投注者。今天:${today}。
+  return `【强制输出要求】你必须生成一个完整的JSON对象，禁止使用省略号，禁止截断内容，禁止在JSON后添加任何说明文字。如果输出被截断，将导致系统无法解析。以下是分析内容：
+
+你是足球盘口价值分析引擎,服务理性投注者。今天:${today}。
 
 比赛:${league} · ${home}(主) vs ${away}(客)${kickoff ? " · 开赛:" + kickoff : ""}
 比赛情境:${CTX_LABEL[context] || context}
@@ -1563,8 +1563,6 @@ ${h2hText}
   "motivation":{"home":"","away":""},
   "news":"",
   "key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},
-  "meta":{"kickoff":"","venue":"","weather":"","referee":"","referee_nat":""},
-  "lineups":{"home":"","away":""},
   "probs":{"home":0.0,"draw":0.0,"away":0.0},
   "scores": [{"score":"2-1","prob":0.28}, {"score":"1-1","prob":0.18}, {"score":"2-0","prob":0.12}],
   "predicted_score": {"score":"2-1","prob":0.28},
@@ -1579,7 +1577,6 @@ ${h2hText}
   "risks":[]
 }`;
 }
-
 // =====================================================================
 // JSON 解析
 // =====================================================================
@@ -2100,7 +2097,7 @@ function validateAndFixScore(r, context, cornerLookup) {
     }
     if (isCupContext) {
       var originalCorner = r.corners.exp_total;
-      var discount = getCornerDiscount(context, ST.league, r._cup_round || 'knockout');
+      var discount = CornerEngine.getCornerDiscount(context, ST.league, r._cup_round || 'knockout');
       var discountedCorner = Math.round(originalCorner * discount * 10) / 10;
       if (Math.abs(originalCorner - discountedCorner) > 0.3) {
         r.corners.exp_total = discountedCorner;
