@@ -242,6 +242,14 @@
    * 先通过 getTeams 查缓存，无需额外请求
    */
   async function getCornerStats(leagueCode, teamName) {
+    const homeNorm = await normalizeName(homeTeam, leagueCode);
+    const awayNorm = await normalizeName(awayTeam, leagueCode);
+
+    let homeStats = await DL.getCornerStats(leagueCode, homeNorm);
+    let awayStats = await DL.getCornerStats(leagueCode, awayNorm);
+    console.log('homeStats:', homeStats);
+    console.log('awayStats:', awayStats);
+
     const teams = await getTeams(leagueCode);
     const team = teams.find(t => t.team_name === teamName || t.team_name_en === teamName);
     if (!team) return null;
@@ -533,8 +541,19 @@
     const h = toEntry(homeStats);
     const a = toEntry(awayStats);
 
-    if (h && a) return { home: h, away: a, total: ((h.avg || 0) + (a.avg || 0)) / 2 };
-    if (h) return { home: h, away: null, total: h.avg || 0 };
+    if (h && a) {
+  var hAvg = h.avg || 0;
+  var aAvg = a.avg || 0;
+  var total;
+  if (hAvg < 8 && aAvg < 8) {
+    total = hAvg + aAvg;
+    console.log('[lookupCorners] 本方角球口径，加法：' + hAvg + ' + ' + aAvg + ' = ' + total);
+  } else {
+    total = (hAvg + aAvg) / 2;
+    console.log('[lookupCorners] 总角球口径，取平均：(' + hAvg + ' + ' + aAvg + ') / 2 = ' + total);
+  }
+  return { home: h, away: a, total: total };
+}
     return { home: null, away: a, total: a ? (a.avg || 0) : 0 };
   }
 
@@ -942,6 +961,7 @@ async function filterSchedule(text) {
   for (var i = 0; i < matches.length; i++) {
     var m = matches[i];
     var lgCode = LEAGUE_CODE_MAP[m.league] || null;
+    console.log('lgCode:', lgCode, 'ST.league:', ST.league);
     var direction = '观望', confidence = 0, reason = '', priority = 3;
     try {
       if (lgCode) {
@@ -1501,7 +1521,7 @@ ${snapContext}
 【🔎 搜索结果（搜索聚合）】
 ${searchContext}
 
-因素权重:①市场共识 ②伤病确认度 ③动机闸门 ④近期状态 ⑤盘口变动
+因素权重:市场共识>伤病>动机>状态>盘口变动。快照调整建议已纳入。
 ⚠️ 快照信号的量化调整建议已在上方标注，请将其纳入概率计算。
 
 ${motivationCaseLib}
@@ -1534,16 +1554,7 @@ ${h2hText}
 3. predicted_score 的总进球数与 goals.over25 必须一致（总进球≥3 → over25≥50%；总进球≤2 → over25≤50%）。
 4. 所有 markets 中的 edge 必须准确计算为 AI概率 - 1/赔率，确保数据一致。
 
-【📊 盘口扫描范围要求（强制执行）】
-你必须在 markets 数组中包含以下所有类型的盘口（如果 OCR 中有对应的赔率数据）：
-1. 胜平负（Full Time / 1X2）
-2. 大小球（Total Goals / Over/Under）
-3. 双方都进球（BTTS / Both Teams to Score）
-4. 总角球（Total Corners）——如果 OCR 中有角球盘口
-5. 让分盘（Handicap / Asian Handicap）——至少包含 -0.5、+0.5、-1、+1 等主要盘口
-6. 正确比分（Correct Score）——列出至少 3-5 个最可能的比分（如 1-0、2-1、1-1、0-1、2-0 等）
-7. 双胜彩（Double Chance）——包含 1X、12、X2 三种组合
-8. 晋级盘/胜出盘（如果 OCR 中有）
+【markets】优先包含OCR中出现的盘口：胜平负、大小球、总角球、BTTS、双胜彩、正确比分（3-5个）。不含让球盘和晋级盘。
 
 即使 Edge 为负或接近零，也应生成条目并标注"无价值"或"低于阈值"，以便用户了解所有盘口的价值评估情况。对于 Correct Score，只输出 AI 认为概率最高的 3-5 个比分即可，无需全部列出。
 
@@ -1564,14 +1575,10 @@ ${h2hText}
   "news":"",
   "key_data":{"home_corner_home":"","away_corner_away":"","home_goals_home":"","away_goals_away":"","home_over25_rate":"","away_over25_rate":"","strength_ratio":""},
   "probs":{"home":0.0,"draw":0.0,"away":0.0},
-  "scores": [{"score":"2-1","prob":0.28}, {"score":"1-1","prob":0.18}, {"score":"2-0","prob":0.12}],
-  "predicted_score": {"score":"2-1","prob":0.28},
+  "scores":[{"score":"2-1","prob":0.28},{"score":"1-1","prob":0.18},{"score":"2-0","prob":0.12}],
+  "predicted_score":{"score":"2-1","prob":0.28},
   "goals":{"exp_total":0.0,"home_exp":0.0,"away_exp":0.0,"over25":0.0,"data_quality":"高|中|低"},
-  "consensus":{"home":0.0,"draw":0.0,"away":0.0,"over25":null,"source":""},
-  "odds_snapshot":{"home":0.0,"draw":0.0,"away":0.0},
-  "markets":[
-    {"m":"盘口类型","s":"方向","odds":0.0,"p":0.0,"edge":0.0,"note":""}
-  ],
+  "markets":[{"m":"盘口类型","s":"方向","odds":0.0,"p":0.0,"edge":0.0,"note":""}],
   "corners":{"exp_home":null,"exp_away":null,"exp_total":null,"data_home":"","data_away":"","h2h_signal":"","suggestion":"","note":"","data_quality":"高|中|低"},
   "rec":{"main":{"dir":"","odds":0,"prob":0,"edge":0,"note":""},"upset":null,"value":[],"conf":"","stake":"","signal_alert":null},
   "risks":[]
@@ -1623,7 +1630,7 @@ async function callDeepSeek(messages, apiKey) {
   var body = {
     model: 'deepseek-v4-pro',
     messages: messages,
-    max_tokens: 24000,
+    max_tokens: 32000,
     temperature: 0.3
   };
   var resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -1635,6 +1642,8 @@ async function callDeepSeek(messages, apiKey) {
     body: JSON.stringify(body)
   });
   var raw = await resp.text();
+  console.log('[DeepSeek] 原始响应长度:', raw.length);   // ← 加这行
+  console.log('[DeepSeek] 原始响应前200字符:', raw.slice(0, 200)); 
   var data;
   try { data = JSON.parse(raw); } catch(e) {
     throw new Error('HTTP '+resp.status+', 非JSON回复:'+raw.slice(0,200));
@@ -2430,6 +2439,17 @@ async function analyze(){
   var home = getField('home'), away = getField('away');
   if(!home || !away){ alert('请填写主客队名称'); return; }
   var lgCode = LEAGUE_CODE_MAP[ST.league] || null;
+  console.log('lgCode:', lgCode, 'ST.league:', ST.league);
+
+  // ---- 打印规范化后的球队名（用于调试） ----
+  try {
+    var homeNorm = await DataLoader.resolveTeamName(home, lgCode);
+    var awayNorm = await DataLoader.resolveTeamName(away, lgCode);
+    console.log('homeNorm (resolveTeamName):', homeNorm);
+    console.log('awayNorm (resolveTeamName):', awayNorm);
+  } catch(e) {
+    console.warn('[调试] resolveTeamName 失败:', e);
+  }
 
   var btn = document.getElementById('analyze-btn');
   btn.disabled = true; btn.textContent = '分析中…';
@@ -2463,6 +2483,7 @@ async function analyze(){
 
     // ---- 获取角球数据（无论缓存） ----
     var cornerLookup = await CornerEngine.lookupCorners(lgCode, home, away);
+    console.log('[analyze] cornerLookup:', cornerLookup);
 
     // ---- ★ 查历史交锋记录（无论缓存，始终执行） ----
     let h2hHistory = [];
