@@ -964,7 +964,7 @@ function normalizeTeamNameForFilter(name, league) {
 function parseSchedule(text) {
   var lines = text.split('\n').filter(function(line) { return line.trim().length > 0 && line.indexOf('vs') !== -1; });
   var matches = [];
-  var knownLeagues = ['瑞超', '挪超', '阿根廷甲', 'MLS', '英超', '西甲', '意甲', '德甲', '法甲'];
+  var knownLeagues = ['瑞超', '挪超', '阿根廷甲', 'MLS', '美职联', '美超', '英超', '西甲', '意甲', '德甲', '法甲', '墨甲', '墨超', '墨西哥超', 'Liga MX', '巴西甲', '巴西超', 'Brasileirao', '荷甲', '葡超', '苏超', '土超', '俄超', '比甲', '奥甲', '欧冠', '欧联', '欧协联'];
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].trim();
     var league = '';
@@ -3497,9 +3497,17 @@ var LEAGUE_CODE_MAP = {
   '德甲': 'bundesliga',
   '法甲': 'ligue_1',
   'MLS': 'mls',
+  '美职联': 'mls',
+  '美超': 'mls',
   '墨甲': 'mexico',
+  '墨超': 'mexico',
+  'Liga MX': 'mexico',
+  '墨西哥超': 'mexico',
   '巴西甲': 'brazil',
+  '巴西超': 'brazil',
+  'Brasileirao': 'brazil',
   '阿根廷甲': 'argentina',
+  '阿超': 'argentina',
   '挪超': 'norway',
   '瑞超': 'sweden',
   // ── 欧洲杯赛（league_code 需与 Supabase leagues 表一致）──
