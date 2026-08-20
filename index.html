@@ -139,19 +139,44 @@
   async function findTeamAnywhere(teamName) {
     const leagues = await getLeagues();
     const lower = teamName.toLowerCase().trim();
+    // 子串匹配的最短有效词长度：避免"fc"、"a"等短词乱命中
+    const MIN_MATCH_LEN = 4;
+
+    // 第一轮：精确/完整子串匹配（DB队名包含搜索词，且搜索词足够长）
     for (const lg of leagues) {
       const found = await findTeam(lg.league_code, teamName);
       if (found) return { ...found, league_code: lg.league_code };
-      // Substring match
+      if (lower.length < MIN_MATCH_LEN) continue;
       const teams = await getTeams(lg.league_code);
       for (const t of teams) {
         const n = (t.team_name || '').toLowerCase();
         const en = (t.team_name_en || '').toLowerCase();
-        if (n.includes(lower) || lower.includes(n) || en.includes(lower) || lower.includes(en)) {
+        // 只允许：DB名包含搜索词，或英文名包含搜索词
+        // 不允许：搜索词包含DB名（容易让短名字误命中）
+        if (
+          (n.length >= MIN_MATCH_LEN && n.includes(lower)) ||
+          (en.length >= MIN_MATCH_LEN && en.includes(lower))
+        ) {
           return { ...t, league_code: lg.league_code };
         }
       }
     }
+
+    // 第二轮：宽松子串（搜索词包含DB名），但要求DB名至少5个字符
+    for (const lg of leagues) {
+      const teams = await getTeams(lg.league_code);
+      for (const t of teams) {
+        const n = (t.team_name || '').toLowerCase();
+        const en = (t.team_name_en || '').toLowerCase();
+        if (
+          (n.length >= 5 && lower.includes(n)) ||
+          (en.length >= 5 && lower.includes(en))
+        ) {
+          return { ...t, league_code: lg.league_code };
+        }
+      }
+    }
+
     return null;
   }
 
@@ -242,14 +267,6 @@
    * 先通过 getTeams 查缓存，无需额外请求
    */
   async function getCornerStats(leagueCode, teamName) {
-    const homeNorm = await normalizeName(homeTeam, leagueCode);
-    const awayNorm = await normalizeName(awayTeam, leagueCode);
-
-    let homeStats = await DL.getCornerStats(leagueCode, homeNorm);
-    let awayStats = await DL.getCornerStats(leagueCode, awayNorm);
-    console.log('homeStats:', homeStats);
-    console.log('awayStats:', awayStats);
-
     const teams = await getTeams(leagueCode);
     const team = teams.find(t => t.team_name === teamName || t.team_name_en === teamName);
     if (!team) return null;
@@ -476,13 +493,26 @@
     }
 
     // 8. 基于统计数据的期望值建议
-    const homeStats = await DL.getCornerStats(leagueCode, homeNorm);
-    const awayStats = await DL.getCornerStats(leagueCode, awayNorm);
+    // 先按联赛查；欧冠/欧联等没有独立联赛记录时，跨联赛兜底（用主客队本土联赛数据）
+    let homeStats = await DL.getCornerStats(leagueCode, homeNorm);
+    let awayStats = await DL.getCornerStats(leagueCode, awayNorm);
+
+    if (!homeStats) {
+      const hAny = await DL.findTeamAnywhere(homeNorm);
+      if (hAny) homeStats = await DL.getCornerStats(hAny.league_code, hAny.team_name);
+    }
+    if (!awayStats) {
+      const aAny = await DL.findTeamAnywhere(awayNorm);
+      if (aAny) awayStats = await DL.getCornerStats(aAny.league_code, aAny.team_name);
+    }
+    // 兜底来源标注
+    const statSource = leagueCode ? '' : '（本土联赛数据）';
 
     if (homeStats && awayStats) {
       const homeContrib = homeStats.home_avg || homeStats.avg_total || baseline / 2;
       const awayContrib = awayStats.away_avg || awayStats.avg_total || baseline / 2;
-      const expectedTotal = homeContrib + awayContrib;
+      // home_avg / away_avg 均代表"全场总角球均值"，取两者平均得预期值
+      const expectedTotal = (homeContrib + awayContrib) / 2;
       result.expectedTotal = expectedTotal;
 
       const discount = getCornerDiscount(context, leagueName);
@@ -491,15 +521,15 @@
       if (adjusted >= thresholdBig) {
         result.direction = '倾向大角';
         result.confidence = 0.52;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角（${homeNorm} 主${homeContrib.toFixed(1)} + ${awayNorm} 客${awayContrib.toFixed(1)}）`;
+        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}（主队主场均值${homeContrib.toFixed(1)} / 客队客场均值${awayContrib.toFixed(1)}，取均）`;
       } else if (adjusted <= thresholdSmall) {
         result.direction = '倾向小角';
         result.confidence = 0.52;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角（${homeNorm} 主${homeContrib.toFixed(1)} + ${awayNorm} 客${awayContrib.toFixed(1)}）`;
+        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}（主队主场均值${homeContrib.toFixed(1)} / 客队客场均值${awayContrib.toFixed(1)}，取均）`;
       } else {
         result.direction = '观望';
         result.confidence = 0.50;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角，处于灰色地带`;
+        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}，处于灰色地带`;
       }
       result.baseline = expectedTotal;
       return result;
@@ -1409,7 +1439,7 @@ function buildPrompt(params){
     if(cornerLookup.away) lines.push('客队 '+cornerLookup.away.team+' 场均总角球：'+cornerLookup.away.avg.toFixed(1));
     else lines.push('客队 '+away+' 无数据');
     if(cornerLookup.home && cornerLookup.away) {
-      var avgTotal = (cornerLookup.home.avg + cornerLookup.away.avg) / 2;
+      var avgTotal = cornerLookup.home.avg + cornerLookup.away.avg;
       lines.push('预期总角球：'+avgTotal.toFixed(1)+'角（两队场均取平均，勿相加）');
     }
     cornerDBText = lines.join('；');
@@ -2053,11 +2083,11 @@ function validateAndFixScore(r, context, cornerLookup) {
   var finalTotal = null;
   
   if (dbHome !== null && dbAway !== null) {
-    finalTotal = (dbHome + dbAway) / 2;
+    finalTotal = dbHome + dbAway;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
     r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
     r.corners.note = '数据库预期值（双方均在库）';
-  } 
+  }
   else if (dbHome !== null && dbAway === null && aiAwayCorner !== null) {
     finalTotal = dbHome + aiAwayCorner;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
@@ -2071,16 +2101,16 @@ function validateAndFixScore(r, context, cornerLookup) {
     r.corners.note = '客队数据库 + 主队AI估算';
   }
   else if (dbHome !== null && dbAway === null) {
-    finalTotal = dbHome;
+    finalTotal = dbHome + 5.0;
     r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
-    r.corners.data_away = '数据缺失';
-    r.corners.note = '仅主队数据库值，客队无数据';
+    r.corners.data_away = '数据缺失（对方估算5角）';
+    r.corners.note = '仅主队数据库值，客队角球估算5.0';
   }
   else if (dbAway !== null && dbHome === null) {
-    finalTotal = dbAway;
-    r.corners.data_home = '数据缺失';
+    finalTotal = 5.0 + dbAway;
+    r.corners.data_home = '数据缺失（对方估算5角）';
     r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
-    r.corners.note = '仅客队数据库值，主队无数据';
+    r.corners.note = '仅客队数据库值，主队角球估算5.0';
   }
   
   if (finalTotal !== null) {
@@ -2491,7 +2521,7 @@ async function analyze(){
       const { supabaseGet } = SupabaseClient;
       const result = await supabaseGet('predictions', {
         select: 'match_date,home_team,away_team,actual_corners,pred_corners,correct_corners',
-        or: `home_team.eq.${home},away_team.eq.${home},home_team.eq.${away},away_team.eq.${away}`,
+        or: `(home_team.eq.${home},away_team.eq.${home},home_team.eq.${away},away_team.eq.${away})`,
         order: 'match_date.desc',
         limit: '10'
       });
@@ -2691,6 +2721,9 @@ function autoAddVerify(r, home, away, cornerLookup){
     pred_score: (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : ''),
     pred_over25: r.goals && r.goals.over25 >= 0.5 ? 'over' : 'under',
     pred_corners_total: r.corners && r.corners.exp_total != null ? r.corners.exp_total : null,
+    pred_corner_direction: r.corners && r.corners.exp_total != null
+      ? (r.corners.exp_total >= 10.5 ? '大角' : r.corners.exp_total <= 9.5 ? '小角' : '观望')
+      : null,
     actual_score: null,
     actual_corners: null,
     actual_1x2: null,
@@ -2725,18 +2758,32 @@ function autoAddVerify(r, home, away, cornerLookup){
   saveVerify(ST.verify);
   // 同步写入 Supabase（dual-write：localStorage 保持兼容，Supabase 实现多端同步）
   try {
-    DataLoader.savePrediction({
+    // 先用完整字段尝试；若失败（列不存在），降级为只写基础字段
+    var predFull = {
       match_date: entry.date,
       league_code: LEAGUE_CODE_MAP[entry.league] || null,
       home_team: home,
       away_team: away,
       pred_corners: entry.pred_corners_total,
-      pred_direction: entry.ai_pred_1x2,
+      pred_direction: entry.pred_corner_direction,
       pred_confidence: entry.conf_score,
       ai_1x2: entry.ai_pred_1x2,
       pred_score: entry.pred_score,
       conf_score: entry.conf_score,
-    }).catch(function(e){ console.warn('Supabase 预测存储失败（不影响本地功能）', e); });
+    };
+    DataLoader.savePrediction(predFull).catch(function(e){
+      console.warn('[历史交错] 完整字段写入失败，错误详情:', e && e.message ? e.message : e);
+      // 降级：只写确定存在的核心字段
+      var predCore = {
+        match_date: entry.date,
+        league_code: LEAGUE_CODE_MAP[entry.league] || null,
+        home_team: home,
+        away_team: away,
+      };
+      DataLoader.savePrediction(predCore).catch(function(e2){
+        console.warn('[历史交错] 核心字段写入也失败（不影响主流程）:', e2 && e2.message ? e2.message : e2);
+      });
+    });
   } catch(ignore) {}
   if(ST.tab === 'verify') refreshVerify();
 }
@@ -3454,7 +3501,27 @@ var LEAGUE_CODE_MAP = {
   '巴西甲': 'brazil',
   '阿根廷甲': 'argentina',
   '挪超': 'norway',
-  '瑞超': 'sweden'
+  '瑞超': 'sweden',
+  // ── 欧洲杯赛（league_code 需与 Supabase leagues 表一致）──
+  '欧冠': 'ucl',
+  '欧联': 'uel',
+  '欧协联': 'uecl',
+  '冠军联赛': 'ucl',
+  '欧联杯': 'uel',
+  '会议联赛': 'uecl',
+  // ── 其他主流联赛 ──
+  '荷甲': 'eredivisie',
+  '葡超': 'portugal',
+  '苏超': 'scotland',
+  '土超': 'turkey',
+  '俄超': 'russia',
+  '比甲': 'belgium',
+  '奥甲': 'austria',
+  '瑞士超': 'switzerland',
+  '希超': 'greece',
+  '丹超': 'denmark',
+  '捷甲': 'czech',
+  '波甲': 'poland',
 };
 var LEAGUES = []; // 从 Supabase 动态加载
 
