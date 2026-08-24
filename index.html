@@ -515,21 +515,55 @@
       const expectedTotal = (homeContrib + awayContrib) / 2;
       result.expectedTotal = expectedTotal;
 
+      // 第二信号：大角率（主队主场大角率 + 客队客场大角率，取均）
+      const homeBigRate = homeStats.home_big_rate != null ? homeStats.home_big_rate
+                        : homeStats.overall_big_rate != null ? homeStats.overall_big_rate : 0.5;
+      const awayBigRate = awayStats.away_big_rate != null ? awayStats.away_big_rate
+                        : awayStats.overall_big_rate != null ? awayStats.overall_big_rate : 0.5;
+      const combinedBigRate = (homeBigRate + awayBigRate) / 2;
+
       const discount = getCornerDiscount(context, leagueName);
       const adjusted = expectedTotal * discount;
 
-      if (adjusted >= thresholdBig) {
-        result.direction = '倾向大角';
-        result.confidence = 0.52;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}（主队主场均值${homeContrib.toFixed(1)} / 客队客场均值${awayContrib.toFixed(1)}，取均）`;
-      } else if (adjusted <= thresholdSmall) {
-        result.direction = '倾向小角';
-        result.confidence = 0.52;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}（主队主场均值${homeContrib.toFixed(1)} / 客队客场均值${awayContrib.toFixed(1)}，取均）`;
+      // 判断两个维度各自的倾向
+      const totalLeanBig   = adjusted >= thresholdBig;
+      const totalLeanSmall = adjusted <= thresholdSmall;
+      const totalNearBig   = adjusted >= thresholdBig - 0.5;   // 灰色地带但偏大
+      const totalNearSmall = adjusted <= thresholdSmall + 0.5; // 灰色地带但偏小
+      const rateLeanBig    = combinedBigRate >= 0.54;
+      const rateLeanSmall  = combinedBigRate <= 0.43;
+
+      const rateStr = `大角率${(combinedBigRate * 100).toFixed(0)}%`;
+      const baseStr = `预期${expectedTotal.toFixed(1)}角${statSource}（主场均${homeContrib.toFixed(1)} / 客场均${awayContrib.toFixed(1)}，取均）`;
+
+      if (totalLeanBig && rateLeanBig) {
+        // 均值 + 大角率双信号大角
+        result.direction = '倾向大角'; result.confidence = 0.57;
+        result.note = `${baseStr}，${rateStr} — 双信号大角`;
+      } else if (totalLeanBig) {
+        // 仅均值超阈值
+        result.direction = '倾向大角'; result.confidence = 0.53;
+        result.note = `${baseStr}，${rateStr}`;
+      } else if (totalNearBig && rateLeanBig) {
+        // 均值偏大但未过线，大角率补充确认
+        result.direction = '倾向大角'; result.confidence = 0.53;
+        result.note = `${baseStr}（灰色偏大），${rateStr} 补充确认`;
+      } else if (totalLeanSmall && rateLeanSmall) {
+        // 双信号小角
+        result.direction = '倾向小角'; result.confidence = 0.57;
+        result.note = `${baseStr}，${rateStr} — 双信号小角`;
+      } else if (totalLeanSmall) {
+        result.direction = '倾向小角'; result.confidence = 0.53;
+        result.note = `${baseStr}，${rateStr}`;
+      } else if (totalNearSmall && rateLeanSmall) {
+        result.direction = '倾向小角'; result.confidence = 0.53;
+        result.note = `${baseStr}（灰色偏小），${rateStr} 补充确认`;
       } else {
+        // 信号不足或相互矛盾
+        const leanLabel = adjusted > (thresholdBig + thresholdSmall) / 2 ? '偏大' : '偏小';
         result.direction = '观望';
         result.confidence = 0.50;
-        result.note = `预期总角球 ${expectedTotal.toFixed(1)}角${statSource}，处于灰色地带`;
+        result.note = `${baseStr}，${rateStr}，信号不足（灰色${leanLabel}）`;
       }
       result.baseline = expectedTotal;
       return result;
@@ -584,7 +618,9 @@
   }
   return { home: h, away: a, total: total };
 }
-    return { home: null, away: a, total: a ? (a.avg || 0) : 0 };
+    // 至少一方有数据时，保留找到的一方
+    var partialTotal = h ? (h.avg || 0) : (a ? (a.avg || 0) : 0);
+    return { home: h, away: a, total: partialTotal };
   }
 
   /**
@@ -920,8 +956,8 @@ select option{background:#121B2E}
 <div class="wrap">
   <div class="sec">📋 赛程筛选器</div>
   <div class="card">
-    <div style="font-size:12px;color:#54678C;margin-bottom:8px">粘贴赛程（每行：联赛 主队 vs 客队）<br>支持联赛：瑞超、挪超、阿根廷甲、MLS</div>
-    <textarea id="schedule-input" class="inp" style="min-height:120px;resize:vertical;font-family:monospace;font-size:12px;line-height:1.6" placeholder="瑞超 赫根 vs 哈尔姆斯塔德&#10;挪超 罗森博格 vs 维京&#10;阿根廷甲 巴拉卡斯中央 vs 罗萨里奥中央&#10;MLS 新英格兰革命 vs 纽约城"></textarea>
+    <div style="font-size:12px;color:#54678C;margin-bottom:8px">粘贴赛程（每行：联赛 主队 vs 客队）<br>可选：行尾加大小球赔率 <span style="color:#F5B841">1.85/1.95</span>（大/小）启用水位分析<br>支持联赛：瑞超、挪超、阿根廷甲、MLS、英超、西甲、意甲、德甲等</div>
+    <textarea id="schedule-input" class="inp" style="min-height:140px;resize:vertical;font-family:monospace;font-size:12px;line-height:1.6" placeholder="瑞超 赫根 vs 哈尔姆斯塔德 1.85/1.95&#10;挪超 罗森博格 vs 维京 1.90/1.90&#10;阿根廷甲 巴拉卡斯中央 vs 罗萨里奥中央&#10;MLS 新英格兰革命 vs 纽约城 1.75/2.05"></textarea>
     <button class="btn-p" id="filter-btn" style="margin-top:10px">🔍 筛选</button>
   </div>
   <div id="filter-results"></div>
@@ -975,11 +1011,19 @@ function parseSchedule(text) {
         break;
       }
     }
+    // 提取可选的大小球赔率：格式 1.85/1.95 在行尾
+    var overOdds = null, underOdds = null;
+    var oddsMatch = line.match(/([\d]+\.[\d]+)\s*\/\s*([\d]+\.[\d]+)\s*$/);
+    if (oddsMatch) {
+      overOdds = parseFloat(oddsMatch[1]);
+      underOdds = parseFloat(oddsMatch[2]);
+      line = line.replace(oddsMatch[0], '').trim();
+    }
     var parts = line.split(/\s+vs\s+/i);
     if (parts.length === 2) {
       var home = parts[0].trim().replace(/^\d+\s*/, '').trim();
       var away = parts[1].trim().replace(/\s*\d+$/, '').trim();
-      matches.push({ league: league, home: home, away: away });
+      matches.push({ league: league, home: home, away: away, overOdds: overOdds, underOdds: underOdds });
     }
   }
   return matches;
@@ -991,31 +1035,51 @@ async function filterSchedule(text) {
   for (var i = 0; i < matches.length; i++) {
     var m = matches[i];
     var lgCode = LEAGUE_CODE_MAP[m.league] || null;
-    console.log('lgCode:', lgCode, 'ST.league:', ST.league);
     var direction = '观望', confidence = 0, reason = '', priority = 3;
+    var expectedTotal = null, matchedRule = false;
+
+    // 1. 角球信号（DB查询）
     try {
       if (lgCode) {
         var advice = await CornerEngine.queryCornerAdvice(lgCode, m.league, m.home, m.away, undefined, { context: 'regular' });
         direction = advice.direction || '观望';
         confidence = advice.confidence || 0;
         reason = advice.note || '';
-        // 优先级：有明确规则=1，统计倾向=2，观望=3
-        if (advice.matchedRule) priority = 1;
-        else if (direction !== '观望') priority = 2;
-        else priority = 3;
+        matchedRule = !!advice.matchedRule;
+        expectedTotal = advice.expectedTotal || null;
       } else {
-        reason = '联赛代码未匹配，请在预测面板手动查询';
+        reason = '联赛未匹配';
       }
     } catch(e) {
       reason = '查询失败：' + e.message;
     }
+
+    // 2. 大小球水位信号
+    var ouGap = null, ouDir = null, ouActive = false;
+    if (m.overOdds && m.underOdds) {
+      ouGap = Math.round((m.underOdds - m.overOdds) * 100) / 100;
+      if (ouGap >= 0.20)       { ouDir = '大球'; ouActive = true; }
+      else if (ouGap <= -0.20) { ouDir = '小球'; ouActive = true; }
+      else                     { ouDir = '平水'; }
+    }
+
+    // 3. 综合优先级（两个维度叠加）
+    var cornerActive = direction !== '观望';
+    var sigCount = (cornerActive ? 1 : 0) + (ouActive ? 1 : 0);
+    if      (sigCount === 2)  priority = 1;   // 双信号
+    else if (sigCount === 1)  priority = 2;   // 单信号
+    else                      priority = 3;   // 无信号
+
     results.push({
       league: m.league, home: m.home, away: m.away,
       direction: direction, confidence: confidence,
-      reason: reason, priority: priority
+      reason: reason, matchedRule: matchedRule, expectedTotal: expectedTotal,
+      overOdds: m.overOdds, underOdds: m.underOdds,
+      ouGap: ouGap, ouDir: ouDir, ouActive: ouActive,
+      cornerActive: cornerActive, sigCount: sigCount, priority: priority
     });
   }
-  results.sort(function(a, b) { return a.priority - b.priority; });
+  results.sort(function(a, b) { return a.priority - b.priority || b.sigCount - a.sigCount; });
   return results;
 }
 
@@ -1026,23 +1090,70 @@ function renderFilterResults(results) {
     container.innerHTML = '<div class="card" style="text-align:center;padding:30px;color:#54678C">暂无匹配数据</div>';
     return;
   }
-  var h = '<div class="sec">📋 筛选结果（按优先级排序）</div>';
+
+  var hasOdds = results.some(function(r){ return r.overOdds !== null; });
+  var gradeMap = { 1: { label: '双信号', color: '#34D399', emoji: '🟢' }, 2: { label: '单信号', color: '#F5B841', emoji: '🟡' }, 3: { label: '无信号', color: '#54678C', emoji: '⚪' } };
+
+  var h = '<div class="sec">📋 筛选结果（' + results.length + '场，按信号强度排序）</div>';
+  if (hasOdds) {
+    h += '<div style="font-size:11px;color:#54678C;margin-bottom:10px;padding:0 4px">✅ 已含大小球水位差分析</div>';
+  } else {
+    h += '<div style="font-size:11px;color:#F5B841;margin-bottom:10px;padding:0 4px">💡 在联赛后加 大赔/小赔（如 1.85/1.95）可启用大小球水位分析</div>';
+  }
+
   for (var i = 0; i < results.length; i++) {
     var r = results[i];
-    var priorityColor = r.priority === 1 ? '#34D399' : (r.priority === 2 ? '#F5B841' : '#54678C');
-    var priorityLabel = r.priority === 1 ? '🔴 高确定' : (r.priority === 2 ? '🟡 需验证' : '⚪ 放弃');
-    var dirColor = r.direction === '大角' ? '#34D399' : (r.direction === '小角' ? '#F87171' : '#54678C');
-    h += '<div class="card" style="margin-bottom:8px;border-left:3px solid ' + priorityColor + '">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">';
-    h += '<div><span style="font-size:12px;color:#54678C">' + (r.league || '未知') + '</span> ';
-    h += '<span style="font-size:14px;font-weight:700">' + r.home + ' vs ' + r.away + '</span></div>';
-    h += '<span style="font-size:11px;color:' + priorityColor + ';font-weight:700">' + priorityLabel + '</span>';
+    var g = gradeMap[r.priority] || gradeMap[3];
+    var cornerColor = r.direction === '大角' ? '#34D399' : (r.direction === '小角' ? '#C084FC' : '#54678C');
+
+    h += '<div class="card" style="margin-bottom:8px;border-left:3px solid ' + g.color + ';padding:10px 14px">';
+
+    // 头部：联赛 + 队名 + 评级
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    h += '<div>';
+    h += '<span style="font-size:10.5px;color:#54678C">' + (r.league || '未知联赛') + '&nbsp;&nbsp;</span>';
+    h += '<span style="font-size:14px;font-weight:700">' + r.home + ' vs ' + r.away + '</span>';
     h += '</div>';
-    h += '<div style="display:flex;gap:12px;margin-top:6px;flex-wrap:wrap">';
-    h += '<span style="font-size:13px;font-weight:800;color:' + dirColor + '">' + r.direction + '</span>';
-    if (r.confidence) h += '<span style="font-size:11px;color:#8CA0C0">置信度 ' + (r.confidence * 100).toFixed(0) + '%</span>';
-    h += '<span style="font-size:11px;color:#54678C">' + r.reason + '</span>';
-    h += '</div></div>';
+    h += '<span style="font-size:11px;font-weight:700;color:' + g.color + '">' + g.emoji + ' ' + g.label + '</span>';
+    h += '</div>';
+
+    // 信号格子
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11.5px">';
+
+    // 角球信号格
+    h += '<div style="background:#0E1626;border-radius:8px;padding:8px">';
+    h += '<div style="font-size:10px;color:#54678C;margin-bottom:3px">⛳ 角球</div>';
+    h += '<div style="font-weight:700;color:' + cornerColor + '">' + (r.cornerActive ? '✅ ' : '') + r.direction + '</div>';
+    if (r.expectedTotal != null) {
+      h += '<div style="font-size:10px;color:#8CA0C0;margin-top:2px">DB预期 ' + parseFloat(r.expectedTotal).toFixed(1) + ' 角</div>';
+    }
+    if (r.confidence) {
+      h += '<div style="font-size:10px;color:#54678C">置信 ' + (r.confidence * 100).toFixed(0) + '%</div>';
+    }
+    h += '</div>';
+
+    // 大小球信号格
+    h += '<div style="background:#0E1626;border-radius:8px;padding:8px">';
+    h += '<div style="font-size:10px;color:#54678C;margin-bottom:3px">🎯 大小球' + (r.ouGap !== null ? '（差' + Math.abs(r.ouGap).toFixed(2) + '）' : '') + '</div>';
+    if (r.ouDir !== null) {
+      var ouColor = r.ouActive ? (r.ouDir === '大球' ? '#34D399' : '#C084FC') : '#54678C';
+      h += '<div style="font-weight:700;color:' + ouColor + '">' + (r.ouActive ? '✅ ' : '') + r.ouDir + '</div>';
+      if (r.overOdds && r.underOdds) {
+        h += '<div style="font-size:10px;color:#54678C;margin-top:2px">大 ' + r.overOdds + ' / 小 ' + r.underOdds + '</div>';
+      }
+    } else {
+      h += '<div style="color:#54678C">— 未输入赔率</div>';
+    }
+    h += '</div>';
+
+    h += '</div>'; // grid
+
+    // 备注
+    if (r.reason) {
+      h += '<div style="font-size:10px;color:#54678C;margin-top:6px">' + r.reason + '</div>';
+    }
+
+    h += '</div>'; // card
   }
   container.innerHTML = h;
 }
@@ -1072,9 +1183,9 @@ var VERIFY_KEY = 'vt_verify_v4';
 var SNAP_PRE = 'odds_snapshot_';
 
 var EDGE_THRESHOLD = {
-  'corners': 0.08,
-  'over_under': 0.06,
-  'default': 0.04
+  'corners': 0.06,
+  'over_under': 0.04,
+  'default': 0.03
 };
 
 function getMarketType(marketName){
@@ -1566,7 +1677,7 @@ ${h2hText}
 - 即使无角球盘口，也应在报告中展示预期角球数作为参考（用数据库值或估算值）
 
 【⚠️ 强制规则】
-1. Edge阈值：角球≥8%、大小球≥6%、其他≥4%。低于阈值则观望。
+1. Edge阈值：角球≥6%、大小球≥4%、其他≥3%。低于阈值则观望。
 2. 挪超强制：Rosenborg/Bodø/Glimt/Molde/Brann/Viking 主场对阵后6名 → 总角球≥10.0，可推荐Over。
 3. 平局联动：平局概率≥25%时，over25上限55%，且角球预期×0.90。
 4. rec.main.edge 必须与 markets 数组中对应盘口的 edge 值完全一致，不得自行重算。
@@ -1574,7 +1685,7 @@ ${h2hText}
 6. 杯赛第二回合（cup_leg2）且主队首回合领先≥2球时，强制应用上方动机扭曲修正规则。
 
 【📋 胜率优先模式 · 三区块输出规则】
-区块1 - 主推：从 probs 中选出概率最高的方向，概率≥55%且Edge达标。
+区块1 - 主推：从 probs 中选出概率最高的方向，概率≥52%且Edge达标。
 区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00，或快照信号触发（客胜被推高且客胜概率≥10%）。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
 
@@ -2065,8 +2176,15 @@ function validateAndFixScore(r, context, cornerLookup) {
   if (!r.corners) r.corners = {};
 
   // cornerLookup 由调用方从 CornerEngine 异步获取后传入（不再调用同步存根）
-  var dbHome = cornerLookup && cornerLookup.home ? cornerLookup.home.avg : null;
-  var dbAway = cornerLookup && cornerLookup.away ? cornerLookup.away.avg : null;
+  // 使用主场语境角球均值（home_avg/away_avg）而非整体avg_total：
+  // home_avg = 主队在主场时的整场总角球均值；away_avg = 客队在客场时的整场总角球均值
+  // 这两个值已经代表全场总角球，不需要再叠加对方角球
+  var dbHome = cornerLookup && cornerLookup.home
+    ? (cornerLookup.home.home != null ? cornerLookup.home.home : cornerLookup.home.avg)
+    : null;
+  var dbAway = cornerLookup && cornerLookup.away
+    ? (cornerLookup.away.away != null ? cornerLookup.away.away : cornerLookup.away.avg)
+    : null;
   
   var kd = r.key_data || {};
   var aiAwayCorner = null;
@@ -2083,10 +2201,20 @@ function validateAndFixScore(r, context, cornerLookup) {
   var finalTotal = null;
   
   if (dbHome !== null && dbAway !== null) {
-    finalTotal = dbHome + dbAway;
-    r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
-    r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
-    r.corners.note = '数据库预期值（双方均在库）';
+    // 启发式判断数据口径：
+    // 双方均 < 8 → 本方角球口径（各队自己踢出），相加得全场总数
+    // 任一 >= 8 → 全场总角球口径，取平均得综合预测
+    if (dbHome < 8 && dbAway < 8) {
+      finalTotal = Math.round((dbHome + dbAway) * 10) / 10;
+      r.corners.data_home = cornerLookup.home.team + ' 本方均' + dbHome;
+      r.corners.data_away = cornerLookup.away.team + ' 本方均' + dbAway;
+      r.corners.note = '数据库预期值（双方本方角球相加）';
+    } else {
+      finalTotal = Math.round((dbHome + dbAway) / 2 * 10) / 10;
+      r.corners.data_home = cornerLookup.home.team + ' 主场均' + dbHome;
+      r.corners.data_away = cornerLookup.away.team + ' 客场均' + dbAway;
+      r.corners.note = '数据库预期值（双方全场均值取平均）';
+    }
   }
   else if (dbHome !== null && dbAway === null && aiAwayCorner !== null) {
     finalTotal = dbHome + aiAwayCorner;
@@ -2101,16 +2229,34 @@ function validateAndFixScore(r, context, cornerLookup) {
     r.corners.note = '客队数据库 + 主队AI估算';
   }
   else if (dbHome !== null && dbAway === null) {
-    finalTotal = dbHome + 5.0;
-    r.corners.data_home = cornerLookup.home.team + ' 场均' + dbHome;
-    r.corners.data_away = '数据缺失（对方估算5角）';
-    r.corners.note = '仅主队数据库值，客队角球估算5.0';
+    if (dbHome < 8) {
+      // 本方角球口径：加客队估算 5 角
+      finalTotal = Math.round((dbHome + 5.0) * 10) / 10;
+      r.corners.data_home = cornerLookup.home.team + ' 本方均' + dbHome;
+      r.corners.data_away = '数据缺失（客队估算5角）';
+      r.corners.note = '主队本方角球 + 客队估算5.0';
+    } else {
+      // 全场总角球口径：直接用，不叠加对方
+      finalTotal = dbHome;
+      r.corners.data_home = cornerLookup.home.team + ' 主场均' + dbHome + '（全场）';
+      r.corners.data_away = '数据缺失';
+      r.corners.note = '仅主队主场全场角球均值（已含双方）';
+    }
   }
   else if (dbAway !== null && dbHome === null) {
-    finalTotal = 5.0 + dbAway;
-    r.corners.data_home = '数据缺失（对方估算5角）';
-    r.corners.data_away = cornerLookup.away.team + ' 场均' + dbAway;
-    r.corners.note = '仅客队数据库值，主队角球估算5.0';
+    if (dbAway < 8) {
+      // 本方角球口径：加主队估算 5 角
+      finalTotal = Math.round((5.0 + dbAway) * 10) / 10;
+      r.corners.data_home = '数据缺失（主队估算5角）';
+      r.corners.data_away = cornerLookup.away.team + ' 本方均' + dbAway;
+      r.corners.note = '主队估算5.0 + 客队本方角球';
+    } else {
+      // 全场总角球口径：直接用
+      finalTotal = dbAway;
+      r.corners.data_home = '数据缺失';
+      r.corners.data_away = cornerLookup.away.team + ' 客场均' + dbAway + '（全场）';
+      r.corners.note = '仅客队客场全场角球均值（已含双方）';
+    }
   }
   
   if (finalTotal !== null) {
@@ -2220,7 +2366,7 @@ function getRecommendationLevel(main, threshold) {
   var edge = main.edge;
   var prob = main.prob;
 
-  if (edge !== null && edge >= threshold && prob !== null && prob >= 0.55) {
+  if (edge !== null && edge >= threshold && prob !== null && prob >= 0.52) {
     return { level: 'strong', label: '✅ 主推', color: '#34D399' };
   }
 
@@ -2958,6 +3104,107 @@ function renderResults(snapData, cornerLookup){
     }
     h += '</div>';
   }
+
+  // ---- ★ 信号完整性评级（大小球水位 + 胜平负Edge + 角球Edge）★ ----
+  (function() {
+    // 1. 大小球水位信号：从markets找Over/Under 2.5条目
+    var ouOver = null, ouUnder = null;
+    markets.forEach(function(mk) {
+      if (getMarketType(mk.m) !== 'over_under') return;
+      var dir = (mk.s || mk.dir || '').toLowerCase();
+      if (dir === '大' || dir.indexOf('over') >= 0) ouOver = mk;
+      else if (dir === '小' || dir.indexOf('under') >= 0) ouUnder = mk;
+    });
+    var ouDir = '观望', ouGap = null, ouColor = '#54678C', ouActive = false;
+    if (ouOver && ouUnder && ouOver.odds && ouUnder.odds) {
+      // 水位差判断：差值 >= 0.20 才算信号
+      ouGap = Math.round((ouUnder.odds - ouOver.odds) * 100) / 100;
+      if (ouGap >= 0.20)       { ouDir = '大球'; ouColor = '#34D399'; ouActive = true; }
+      else if (ouGap <= -0.20) { ouDir = '小球'; ouColor = '#C084FC'; ouActive = true; }
+      else                     { ouDir = '观望（差' + Math.abs(ouGap).toFixed(2) + '）'; }
+    } else if (ouOver && ouOver.edge >= 0.04 && (ouOver.p || 0) >= 0.52) {
+      ouDir = '大球（Edge ' + (ouOver.edge * 100).toFixed(1) + '%）'; ouColor = '#34D399'; ouActive = true;
+    } else if (ouUnder && ouUnder.edge >= 0.04 && (ouUnder.p || 0) >= 0.52) {
+      ouDir = '小球（Edge ' + (ouUnder.edge * 100).toFixed(1) + '%）'; ouColor = '#C084FC'; ouActive = true;
+    }
+
+    // 2. 胜平负信号：隐含概率 + Edge
+    var snapOdds = r.odds_snapshot || {};
+    var wlDir = null, wlColor = '#54678C', wlActive = false;
+    var wlCandidates = [
+      { label: '主胜', prob: (r.probs||{}).home, odds: snapOdds.home, minProb: 0.65 },
+      { label: '客胜', prob: (r.probs||{}).away, odds: snapOdds.away, minProb: 0.65 },
+      { label: '平局', prob: (r.probs||{}).draw, odds: snapOdds.draw, minProb: 0.30 }
+    ];
+    wlCandidates.forEach(function(c) {
+      if (wlActive) return;
+      if (c.prob && c.prob >= c.minProb && c.odds && c.odds > 1) {
+        var edge = c.prob - 1 / c.odds;
+        if (edge >= 0.03) { wlDir = c.label + '（Edge ' + (edge * 100).toFixed(1) + '%）'; wlColor = '#6FA8F5'; wlActive = true; }
+      }
+    });
+    if (!wlDir) wlDir = '无信号';
+
+    // 3. 角球信号：Edge达标
+    var cornerDir = '无信号', cornerColor = '#54678C', cornerActive = false;
+    var cornerConflict = false, cornerConflictNote = '';
+    var cornerMk = null;
+    markets.forEach(function(mk) {
+      if (cornerActive || getMarketType(mk.m) !== 'corners') return;
+      if ((mk.edge || 0) >= 0.06 && (mk.p || 0) >= 0.52) {
+        cornerMk = mk;
+        cornerActive = true;
+      }
+    });
+
+    if (cornerActive && cornerMk) {
+      // 检查DB预测与AI市场概率的矛盾
+      // 提取推荐盘口的线值（如 "总角球 10.5" → 10.5）
+      var cornerS = (cornerMk.s || cornerMk.dir || '');
+      var dbExpTotal = cn.exp_total; // DB修正后的预期总角球
+      var lineMatch = (cornerMk.m || '').match(/([\d.]+)/);
+      var lineVal = lineMatch ? parseFloat(lineMatch[1]) : null;
+      var isOverDir = cornerS.toLowerCase().indexOf('over') >= 0 ||
+                      cornerS.indexOf('大') >= 0 || cornerS.indexOf('Over') >= 0;
+
+      if (isOverDir && lineVal && dbExpTotal != null && dbExpTotal < lineVal * 0.85) {
+        // DB预期低于推荐线的85%：AI概率与数据库存在显著矛盾
+        cornerConflict = true;
+        cornerConflictNote = 'DB预期' + dbExpTotal.toFixed(1) + '角 vs 推荐线' + lineVal + '，存在冲突';
+        cornerColor = '#FB923C'; // 橙色降级
+        cornerDir = cornerS + '（Edge ' + (cornerMk.edge * 100).toFixed(1) + '%）⚠️冲突';
+        // 冲突时不计入有效信号数
+        cornerActive = false;
+      } else {
+        cornerColor = '#F5B841';
+        cornerDir = cornerS + '（Edge ' + (cornerMk.edge * 100).toFixed(1) + '%）';
+      }
+    }
+
+    // 4. A/B/C/D 综合评级
+    var sigCount = (ouActive ? 1 : 0) + (wlActive ? 1 : 0) + (cornerActive ? 1 : 0);
+    var grade, gradeColor, gradeNote;
+    if      (sigCount === 3) { grade = 'A'; gradeColor = '#34D399'; gradeNote = '三维信号齐全，可考虑组合投注'; }
+    else if (sigCount === 2) { grade = 'B'; gradeColor = '#6FA8F5'; gradeNote = '双维度信号，仅对有信号方向下注'; }
+    else if (sigCount === 1) { grade = 'C'; gradeColor = '#F5B841'; gradeNote = '单一信号，轻仓或谨慎介入'; }
+    else                     { grade = 'D'; gradeColor = '#F87171'; gradeNote = '无明确信号，建议观望'; }
+
+    h += '<div class="card" style="border-left:4px solid ' + gradeColor + ';background:' + gradeColor + '08;border-radius:12px">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    h += '<div style="font-size:12px;color:#54678C;font-weight:700;letter-spacing:.1em">📡 信号完整性评级</div>';
+    h += '<div style="font-size:20px;font-weight:900;color:' + gradeColor + ';border:2px solid ' + gradeColor + ';border-radius:8px;padding:1px 14px;letter-spacing:.05em">' + grade + ' 级</div>';
+    h += '</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11.5px;margin-bottom:8px">';
+    h += '<div style="background:#0E1626;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#54678C;margin-bottom:4px">胜平负</div><div style="font-weight:700;color:' + wlColor + '">' + (wlActive ? '✅ ' : '') + wlDir + '</div></div>';
+    h += '<div style="background:#0E1626;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#54678C;margin-bottom:4px">大小球' + (ouGap !== null ? ' 差' + Math.abs(ouGap).toFixed(2) : '') + '</div><div style="font-weight:700;color:' + ouColor + '">' + (ouActive ? '✅ ' : '') + ouDir + '</div></div>';
+    h += '<div style="background:#0E1626;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#54678C;margin-bottom:4px">角球</div><div style="font-weight:700;color:' + cornerColor + '">' + (cornerActive ? '✅ ' : cornerConflict ? '⚠️ ' : '') + cornerDir + '</div></div>';
+    h += '</div>';
+    if (cornerConflict) {
+      h += '<div style="font-size:10.5px;color:#FB923C;margin-bottom:6px">⚠️ 角球信号降级：' + cornerConflictNote + '，建议以DB数据为主，谨慎跟推</div>';
+    }
+    h += '<div style="font-size:11px;color:' + gradeColor + '">' + gradeNote + '</div>';
+    h += '</div>';
+  })();
 
   // ---- ★★★ 盘口价值扫描（含角球盘口补全）★★★ ----
   var hasCornerMarket = markets.some(function(mk){ return mk.m && mk.m.indexOf('角球') >= 0; });
