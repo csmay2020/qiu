@@ -511,8 +511,18 @@
     if (homeStats && awayStats) {
       const homeContrib = homeStats.home_avg || homeStats.avg_total || baseline / 2;
       const awayContrib = awayStats.away_avg || awayStats.avg_total || baseline / 2;
-      // home_avg / away_avg 均代表"全场总角球均值"，取两者平均得预期值
-      const expectedTotal = (homeContrib + awayContrib) / 2;
+      // 启发式判断数据口径（与 renderResults 一致）：
+      // 双方均 < 8 → 本方角球口径（各队自己踢出），相加得全场总数
+      // 任一 >= 8 → 全场总角球口径，取平均得综合预测
+      let expectedTotal;
+      let calcMethod;
+      if (homeContrib < 8 && awayContrib < 8) {
+        expectedTotal = Math.round((homeContrib + awayContrib) * 10) / 10;
+        calcMethod = '相加';
+      } else {
+        expectedTotal = Math.round((homeContrib + awayContrib) / 2 * 10) / 10;
+        calcMethod = '取均';
+      }
       result.expectedTotal = expectedTotal;
 
       // 第二信号：大角率（主队主场大角率 + 客队客场大角率，取均）
@@ -534,7 +544,7 @@
       const rateLeanSmall  = combinedBigRate <= 0.43;
 
       const rateStr = `大角率${(combinedBigRate * 100).toFixed(0)}%`;
-      const baseStr = `预期${expectedTotal.toFixed(1)}角${statSource}（主场均${homeContrib.toFixed(1)} / 客场均${awayContrib.toFixed(1)}，取均）`;
+      const baseStr = `预期${expectedTotal.toFixed(1)}角${statSource}（主场均${homeContrib.toFixed(1)} / 客场均${awayContrib.toFixed(1)}，${calcMethod}）`;
 
       if (totalLeanBig && rateLeanBig) {
         // 均值 + 大角率双信号大角
