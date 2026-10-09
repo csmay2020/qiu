@@ -1050,22 +1050,29 @@ function filterConclusion(r){
 }
 function filterVisual(r){
  const cr=r.cornerReport,c=filterConclusion(r),old=(r.homeAge??0)>90||(r.awayAge??0)>90;
- if(cr?.conflict)return {color:'#C0392B',background:'#F5DDD6',label:'特点冲突'};
+ if(cr?.conflict)return {color:'#C0392B',background:'#FDFBF7',label:'特点冲突'};
  if(r.error||!r.profiles)return {color:'#B7791F',background:'#F5E8C8',label:'待确认'};
  if(old||(cr?.active&&((r.homeSamples??0)<5||(r.awaySamples??0)<5))||(!cr?.active&&cr?.pending?.length))return {color:'#B7791F',background:'#F5E8C8',label:'谨慎 / 待确认'};
- if(c.attention)return {color:'#2D7D4F',background:'#3E3428',label:'值得关注'};
- return {color:'#A89E8E',background:'#3E3428',label:'暂无提示'};
+ if(c.attention)return {color:'#2D7D4F',background:'#FDFBF7',label:'值得关注'};
+ return {color:'#A89E8E',background:'#FDFBF7',label:'暂无提示'};
 }
 function filterHintTags(r){
  const tags=[],cr=r.cornerReport;
  // item5: prob==1 且 sample_size==null 的规则 → 样本未知,黄色警告(样式与'谨慎/待确认'同色系)
  const _srAll=(cr?.matched||[]).concat(cr?.pending||[]);
- if(_srAll.some(x=>x.prob===1&&x.sample_size==null))tags.push(['⚠️ 100%规则样本未知·待验证','#B7791F']);
- if(cr?.conflict)tags.push(['角球特点冲突','#C0392B']);
- else if(cr?.active)tags.push([cr.direction==='报告特点偏大角'?'角球偏大 ↑':'角球偏小 ↓',cr.direction==='报告特点偏大角'?'#C2571B':'#2E5FA3']);
- else tags.push(['角球暂无明确提示','#A89E8E']);
- if(r.ouActive)tags.push([r.ouGap>0?'进球水位偏大 ↑':'进球水位偏小 ↓',r.ouGap>0?'#C2571B':'#2E5FA3']);
- return tags.map(([label,color])=>'<span style="display:inline-block;color:'+color+';border:1px solid '+color+';border-radius:6px;padding:3px 8px;margin:3px 6px 3px 0;font-size:12px">'+esc(label)+'</span>').join('');
+ // 标签格式: [文本, 文字色, 背景色, 边框色]
+ if(_srAll.some(x=>x.prob===1&&x.sample_size==null))tags.push(['⚠️ 100%规则样本未知·待验证','#B7791F','#FEF3E2','#E8C87A']);
+ if(cr?.conflict)tags.push(['角球特点冲突','#C0392B','#FDECE8','#E8AFA5']);
+ else if(cr?.active){
+   if(cr.direction==='报告特点偏大角')tags.push(['角球偏大 ↑','#B7791F','#FEF3E2','#E8C87A']);
+   else tags.push(['角球偏小 ↓','#2E5FA3','#E8F0FE','#A8C0E8']);
+ }
+ else tags.push(['角球暂无明确提示','#A89E8E','#F0EAE0','#DDD3C3']);
+ if(r.ouActive){
+   if(r.ouGap>0)tags.push(['进球水位偏大 ↑','#7A6E5F','#F0EAE0','#DDD3C3']);
+   else tags.push(['进球水位偏小 ↓','#7A6E5F','#F0EAE0','#DDD3C3']);
+ }
+ return tags.map(([label,tc,bg,bc])=>'<span style="display:inline-block;color:'+tc+';background:'+bg+';border:1px solid '+bc+';border-radius:6px;padding:3px 8px;margin:3px 6px 3px 0;font-size:12px">'+esc(label)+'</span>').join('');
 }
 function renderFilterResults(results){
  const root=document.getElementById('filter-results'),focus=results.filter(r=>filterConclusion(r).attention),rest=results.filter(r=>!filterConclusion(r).attention);
