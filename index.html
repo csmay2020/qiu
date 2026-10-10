@@ -652,36 +652,36 @@ var TEAM_NAME_MAP = {};
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#E8E0D5;color:#3E3428;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
+body{background:#D6C9B4;color:#3E3428;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;min-height:100vh;padding-bottom:70px}
 input,textarea,select,button{font-family:inherit;font-size:14px}
 input::placeholder,textarea::placeholder{color:#A89E8E}
 input:focus,textarea:focus,select:focus{outline:none;border-color:#B7791F88!important}
-select option{background:#FDFBF7}
+select option{background:#EFE7D8}
 .wrap{max-width:720px;margin:0 auto;padding:0 14px}
-.card{background:#FDFBF7;border:1px solid #DDD3C3;border-radius:14px;padding:16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(62,52,40,.08)}
-.inp{width:100%;padding:10px 12px;background:#F0EAE0;border:1px solid #DDD3C3;border-radius:9px;color:#3E3428;outline:none}
+.card{background:#EFE7D8;border:1px solid #C4B394;border-radius:14px;padding:16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(62,52,40,.08)}
+.inp{width:100%;padding:10px 12px;background:#E0D5C0;border:1px solid #C4B394;border-radius:9px;color:#3E3428;outline:none}
 .sec{font-size:11px;letter-spacing:.18em;color:#A89E8E;margin:22px 0 10px;font-weight:700}
-.chip{padding:7px 13px;border-radius:999px;border:1px solid #DDD3C3;background:transparent;color:#7A6E5F;font-size:12.5px;cursor:pointer;margin:0 3px 6px 0;display:inline-block}
+.chip{padding:7px 13px;border-radius:999px;border:1px solid #C4B394;background:transparent;color:#7A6E5F;font-size:12.5px;cursor:pointer;margin:0 3px 6px 0;display:inline-block}
 .chip.on{border-color:#B7791F;background:#B7791F22;color:#B7791F;font-weight:700}
-.btn-p{padding:13px 0;width:100%;border-radius:10px;border:none;background:linear-gradient(135deg,#B7791F,#8F5E14);color:#FDFBF7;font-size:15px;font-weight:800;cursor:pointer}
-.btn-p:disabled{background:#DDD3C3;color:#A89E8E;cursor:not-allowed}
-.btn-s{padding:6px 12px;border-radius:8px;border:1px solid #DDD3C3;background:transparent;color:#7A6E5F;font-size:12px;cursor:pointer}
+.btn-p{padding:13px 0;width:100%;border-radius:10px;border:none;background:linear-gradient(135deg,#B7791F,#8F5E14);color:#EFE7D8;font-size:15px;font-weight:800;cursor:pointer}
+.btn-p:disabled{background:#C4B394;color:#A89E8E;cursor:not-allowed}
+.btn-s{padding:6px 12px;border-radius:8px;border:1px solid #C4B394;background:transparent;color:#7A6E5F;font-size:12px;cursor:pointer}
 .btn-s.small{font-size:11px;padding:4px 10px}
 .gold{color:#B7791F;border-color:#B7791F!important}
 .red{color:#C0392B;border-color:#C0392B!important}
 .green{color:#2D7D4F;border-color:#2D7D4F!important}
 .blue{color:#2E5FA3;border-color:#2E5FA3!important}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.tabs{display:flex;background:#FDFBF7;border-bottom:1px solid #DDD3C3;position:sticky;top:0;z-index:5}
+.tabs{display:flex;background:#EFE7D8;border-bottom:1px solid #C4B394;position:sticky;top:0;z-index:5}
 .tab-btn{flex:1;padding:13px 0;font-size:13px;color:#A89E8E;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer}
 .tab-btn.on{color:#B7791F;font-weight:800;border-bottom-color:#B7791F}
-.erow{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr 1fr;gap:6px;align-items:center;padding:9px 6px;border-bottom:1px solid #DDD3C380}
-.ebar{width:50px;height:5px;background:#F0EAE0;border-radius:3px;position:relative;overflow:hidden;display:inline-block}
+.erow{display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr 1fr;gap:6px;align-items:center;padding:9px 6px;border-bottom:1px solid #C4B39480}
+.ebar{width:50px;height:5px;background:#E0D5C0;border-radius:3px;position:relative;overflow:hidden;display:inline-block}
 .num{font-variant-numeric:tabular-nums;font-family:'SF Mono',Consolas,monospace}
-.slip{background:linear-gradient(160deg,#FBF3E0,#FDFBF7);border:1px solid #B7791F55;border-radius:14px;padding:18px;margin:16px 0 6px;position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(217,119,6,.08)}
+.slip{background:linear-gradient(160deg,#FBF3E0,#EFE7D8);border:1px solid #B7791F55;border-radius:14px;padding:18px;margin:16px 0 6px;position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(217,119,6,.08)}
 .slip-bar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#B7791F,transparent)}
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.stat-card{background:#FDFBF7;border-radius:12px;padding:14px 10px;text-align:center;border:1px solid #DDD3C3;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.stat-card{background:#EFE7D8;border-radius:12px;padding:14px 10px;text-align:center;border:1px solid #C4B394;box-shadow:0 1px 2px rgba(15,23,42,.05)}
 .stat-card .num{font-size:22px;font-weight:900}
 .stat-card .label{font-size:10px;color:#A89E8E;margin-top:2px}
 .stat-card .sub{font-size:10.5px;color:#7A6E5F;margin-top:2px}
@@ -751,7 +751,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
 </script></head>
 <body>
 
-<div style="background:linear-gradient(165deg,#FDFBF7,#E8E0D5 55%,#FDFBF7);border-bottom:1px solid #DDD3C3;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
+<div style="background:linear-gradient(165deg,#EFE7D8,#D6C9B4 55%,#EFE7D8);border-bottom:1px solid #C4B394;padding:20px 20px 14px;text-align:center;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% -30%,#B7791F18,transparent 60%);pointer-events:none"></div>
   <div style="font-size:10px;letter-spacing:.35em;color:#B7791F">VALUE TERMINAL · 数据修复版</div>
   <div style="font-size:20px;font-weight:900;margin:4px 0 2px">盘口价值分析终端</div>
@@ -759,7 +759,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
 </div>
 
 <!-- API Key面板 -->
-<div id="key-panel" style="background:#F0EAE0;border-bottom:1px solid #DDD3C3">
+<div id="key-panel" style="background:#E0D5C0;border-bottom:1px solid #C4B394">
   <button id="key-toggle" style="width:100%;padding:9px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
     <span id="key-badge" style="font-size:11.5px;color:#B7791F">⚡ 点击设置 API Keys</span>
     <span id="key-arrow" style="font-size:10px;color:#A89E8E">▼</span>
@@ -823,7 +823,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
   </div>
 </div>
 
-<div style="background:#F0EAE0;border-bottom:1px solid #DDD3C3;padding:4px 16px;font-size:10.5px;color:#2E5FA3;display:flex;justify-content:space-between">
+<div style="background:#E0D5C0;border-bottom:1px solid #C4B394;padding:4px 16px;font-size:10.5px;color:#2E5FA3;display:flex;justify-content:space-between">
   <span id="engine-status">🔍 当前: iOS OCR Server</span>
   <span id="snapshot-status">📸 快照: 无</span>
 </div>
@@ -851,11 +851,11 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
     </div>
 <details style="margin:10px 0"><summary>补充球队变化（可选）</summary><p style="font-size:12px">登记有来源的变化，用于区分变化前后样本；资料保存在当前浏览器。</p><select class="inp" id="change-side"><option value="home">主队</option><option value="away">客队</option></select><select class="inp" id="change-type"><option value="coach">换帅</option><option value="promotion">升降级</option><option value="lineup">主要阵容变化</option><option value="injury">伤停</option></select><input class="inp" id="change-date" type="date"><input class="inp" id="change-source" placeholder="消息来源或网址"><input class="inp" id="change-description" placeholder="变化说明"><button class="btn-s" id="change-save" type="button">保存变化</button><div id="change-status"></div></details><div style="margin:8px 0"><button class="btn" id="corner-preview-btn" type="button">查看角球历史数据</button><div id="corner-reference-panel" style="margin-top:10px"></div></div>
     <!-- 实时修正输入（手动触发） -->
-    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #DDD3C3;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #C4B394;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span style="font-size:10.5px;color:#A89E8E">⏱️ 实时修正（分钟/角球/事件）:</span>
       <input id="live-minute" class="inp" style="width:50px;padding:4px 6px;font-size:12px" placeholder="min">
       <input id="live-corners" class="inp" style="width:50px;padding:4px 6px;font-size:12px" placeholder="角">
-      <select id="live-event" style="background:#F0EAE0;border:1px solid #DDD3C3;color:#3E3428;border-radius:6px;padding:4px 6px;font-size:12px">
+      <select id="live-event" style="background:#E0D5C0;border:1px solid #C4B394;color:#3E3428;border-radius:6px;padding:4px 6px;font-size:12px">
         <option value="">无事件</option>
         <option value="red">🟥 红牌</option>
         <option value="penalty">⚽ 点球</option>
@@ -863,7 +863,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
       <button class="btn-s small" id="apply-live-btn">应用修正</button>
       <span id="live-feedback" style="font-size:10.5px;color:#2E5FA3"></span>
     </div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #DDD3C3;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #C4B394;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button id="snapshot-clear-btn" class="btn-s red small" style="display:none">🗑️ 清除快照</button>
       <span id="snapshot-info" style="font-size:10.5px;color:#A89E8E"></span>
     </div>
@@ -878,7 +878,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
     <div id="odds-img-panel">
       <input type="file" id="img-file" accept="image/*" multiple style="display:none">
       <div id="img-preview-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px"></div>
-      <button id="img-add-btn" style="width:100%;padding:16px 0;background:#F0EAE0;border:1px dashed #DDD3C3;border-radius:10px;color:#7A6E5F;font-size:13px;cursor:pointer">
+      <button id="img-add-btn" style="width:100%;padding:16px 0;background:#E0D5C0;border:1px dashed #C4B394;border-radius:10px;color:#7A6E5F;font-size:13px;cursor:pointer">
         点击上传截图（最多8张）<br><span style="font-size:10.5px;color:#A89E8E">同一场比赛不同时间上传，自动对比快照</span>
       </button>
     </div>
@@ -895,7 +895,7 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
   </div>
 
   <div id="results-area" style="display:none;margin-top:8px"></div>
-  <div id="pace-analysis-result" style="display:none;margin-top:8px;padding:10px;background:#F0EAE0;border-radius:8px;border:1px solid #DDD3C3;font-size:12px;color:#7A6E5F"></div>
+  <div id="pace-analysis-result" style="display:none;margin-top:8px;padding:10px;background:#E0D5C0;border-radius:8px;border:1px solid #C4B394;font-size:12px;color:#7A6E5F"></div>
 
 </div>
 </div>
@@ -1050,11 +1050,11 @@ function filterConclusion(r){
 }
 function filterVisual(r){
  const cr=r.cornerReport,c=filterConclusion(r),old=(r.homeAge??0)>90||(r.awayAge??0)>90;
- if(cr?.conflict)return {color:'#C0392B',background:'#FDFBF7',label:'特点冲突'};
+ if(cr?.conflict)return {color:'#C0392B',background:'#EFE7D8',label:'特点冲突'};
  if(r.error||!r.profiles)return {color:'#B7791F',background:'#F5E8C8',label:'待确认'};
  if(old||(cr?.active&&((r.homeSamples??0)<5||(r.awaySamples??0)<5))||(!cr?.active&&cr?.pending?.length))return {color:'#B7791F',background:'#F5E8C8',label:'谨慎 / 待确认'};
- if(c.attention)return {color:'#2D7D4F',background:'#FDFBF7',label:'值得关注'};
- return {color:'#A89E8E',background:'#FDFBF7',label:'暂无提示'};
+ if(c.attention)return {color:'#2D7D4F',background:'#EFE7D8',label:'值得关注'};
+ return {color:'#A89E8E',background:'#EFE7D8',label:'暂无提示'};
 }
 function filterHintTags(r){
  const tags=[],cr=r.cornerReport;
@@ -1067,10 +1067,10 @@ function filterHintTags(r){
    if(cr.direction==='报告特点偏大角')tags.push(['角球偏大 ↑','#B7791F','#FEF3E2','#E8C87A']);
    else tags.push(['角球偏小 ↓','#2E5FA3','#E8F0FE','#A8C0E8']);
  }
- else tags.push(['角球暂无明确提示','#A89E8E','#F0EAE0','#DDD3C3']);
+ else tags.push(['角球暂无明确提示','#A89E8E','#E0D5C0','#C4B394']);
  if(r.ouActive){
-   if(r.ouGap>0)tags.push(['进球水位偏大 ↑','#7A6E5F','#F0EAE0','#DDD3C3']);
-   else tags.push(['进球水位偏小 ↓','#7A6E5F','#F0EAE0','#DDD3C3']);
+   if(r.ouGap>0)tags.push(['进球水位偏大 ↑','#7A6E5F','#E0D5C0','#C4B394']);
+   else tags.push(['进球水位偏小 ↓','#7A6E5F','#E0D5C0','#C4B394']);
  }
  return tags.map(([label,tc,bg,bc])=>'<span style="display:inline-block;color:'+tc+';background:'+bg+';border:1px solid '+bc+';border-radius:6px;padding:3px 8px;margin:3px 6px 3px 0;font-size:12px">'+esc(label)+'</span>').join('');
 }
@@ -1279,14 +1279,14 @@ function refreshImgGrid(){
     wrap.style.cssText = 'position:relative';
     var im = document.createElement('img');
     im.src = img.preview;
-    im.style.cssText = 'width:100%;height:130px;object-fit:cover;object-position:top;border-radius:8px;border:1px solid #DDD3C3;display:block';
+    im.style.cssText = 'width:100%;height:130px;object-fit:cover;object-position:top;border-radius:8px;border:1px solid #C4B394;display:block';
     var del = document.createElement('button');
     del.textContent = '✕';
-    del.style.cssText = 'position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:#DDD3C3;color:#C0392B;font-size:12px;cursor:pointer;line-height:22px;padding:0';
+    del.style.cssText = 'position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;background:#C4B394;color:#C0392B;font-size:12px;cursor:pointer;line-height:22px;padding:0';
     del.onclick = function(){ ST.images.splice(i,1); refreshImgGrid(); };
     var num = document.createElement('div');
     num.textContent = i+1;
-    num.style.cssText = 'position:absolute;bottom:4px;left:6px;font-size:9.5px;color:#7A6E5F;background:#DDD3C3;padding:1px 5px;border-radius:5px';
+    num.style.cssText = 'position:absolute;bottom:4px;left:6px;font-size:9.5px;color:#7A6E5F;background:#C4B394;padding:1px 5px;border-radius:5px';
     wrap.appendChild(im); wrap.appendChild(del); wrap.appendChild(num);
     grid.appendChild(wrap);
   });
@@ -2620,7 +2620,18 @@ function autoAddVerify(r, home, away, cornerLookup){
     ai_pred_1x2: pred_1x2,
     sys_rec_1x2: sys_1x2,
     pred_score: (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : ''),
-    pred_over25: r.goals && typeof r.goals.over25 === 'number' ? (r.goals.over25 >= 0.5 ? 'over' : 'under') : null,
+    pred_over25: (function(){
+      // 大小球从预测比分推导 (替代 AI 独立预测，避免比分与大小球自相矛盾)
+      // 规则: 总进球>=3 → over; 总进球<=2 → under
+      var ps = (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : '');
+      var m = /^\s*(\d+)\s*[-:]\s*(\d+)\s*$/.exec(ps || '');
+      if(m){
+        var tot = parseInt(m[1],10) + parseInt(m[2],10);
+        return tot >= 3 ? 'over' : 'under';
+      }
+      // 比分解析失败时降级用 AI 概率
+      return (r.goals && typeof r.goals.over25 === 'number') ? (r.goals.over25 >= 0.5 ? 'over' : 'under') : null;
+    })(),
     pred_corners_total: !r._corner_reference_only && r.corners && r.corners.exp_total != null ? r.corners.exp_total : null,
     reference_corners_total: r.corners ? r.corners.reference_total : null,
     model_version: r.model_version,
@@ -2776,7 +2787,7 @@ function renderResults(snapData, cornerLookup){
   h += '<div><div style="font-size:14px;font-weight:700;color:' + conf.color + '">' + confTitle + '</div>';
   h += '<div style="font-size:10.5px;color:#A89E8E">' + confSub + confTag + '</div>';
   h += '</div></div>';
-  h += '<div style="width:120px;height:6px;background:#F0EAE0;border-radius:3px;overflow:hidden">';
+  h += '<div style="width:120px;height:6px;background:#E0D5C0;border-radius:3px;overflow:hidden">';
   h += '<div style="width:' + conf.score + '%;height:100%;background:' + conf.color + ';border-radius:3px"></div>';
   h += '</div>';
   h += '</div>';
@@ -2822,7 +2833,7 @@ function renderResults(snapData, cornerLookup){
       if(dAway > 5) signals.push({type:'away_pushed', msg:'📈 客胜被推高（+' + dAway.toFixed(0) + '%），客胜价值可能被低估'});
       if(dHome < -5 && Math.abs(dDraw) < 3 && dAway > 3) signals.push({type:'overheat_combo', msg:'⚡ 主胜过热信号：主胜大幅下降，平赔锁定，客胜上升，主胜可能被高估'});
       if(signals.length){
-        h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #DDD3C3">';
+        h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #C4B394">';
         signals.forEach(function(s){ h += '<div style="font-size:11px;color:'+(s.type==='away_pushed'?'#2D7D4F':s.type==='home_overheat'?'#C0392B':'#B7791F')+';padding:2px 0">'+s.msg+'</div>'; });
         h += '</div>';
       }
@@ -2876,7 +2887,7 @@ function renderResults(snapData, cornerLookup){
   
   h += '<div><span style="color:#A89E8E">AI角球预判</span><br><b style="color:#8B5A9E">'+(cn.exp_total != null ? cn.exp_total.toFixed(2)+'角' : '—')+'</b></div>';
   h += '</div>';
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid #DDD3C3">';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid #C4B394">';
   h += '<div><span style="color:#A89E8E">主胜概率</span><br><b style="color:#2E5FA3">'+(pr.home != null ? pct(pr.home) : '—')+'</b></div>';
   h += '<div><span style="color:#A89E8E">平局概率</span><br><b style="color:#B7791F">'+(pr.draw != null ? pct(pr.draw) : '—')+'</b></div>';
   h += '<div><span style="color:#A89E8E">客胜概率</span><br><b style="color:#8B5A9E">'+(pr.away != null ? pct(pr.away) : '—')+'</b></div>';
@@ -2890,15 +2901,15 @@ function renderResults(snapData, cornerLookup){
   h += '<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:12px;color:#A89E8E;font-weight:700;letter-spacing:.1em">分析闸门</span><span style="padding:4px 12px;border-radius:999px;border:1px solid '+gv[1]+';color:'+gv[1]+';font-size:12.5px;font-weight:700;background:'+gv[1]+'14">'+gv[0]+'</span></div>';
   if(r.gate_note) h += '<div style="font-size:12.5px;color:#7A6E5F;margin-bottom:8px">'+esc(r.gate_note)+'</div>';
   var mot = r.motivation || {};
-  h += '<div class="g2"><div style="background:#F0EAE0;border-radius:8px;padding:10px"><div style="font-size:10px;color:#2E5FA3;font-weight:700;margin-bottom:3px">主 · '+esc(home)+'</div><div style="font-size:12px;color:#7A6E5F">'+esc(mot.home||'—')+'</div></div><div style="background:#F0EAE0;border-radius:8px;padding:10px"><div style="font-size:10px;color:#8B5A9E;font-weight:700;margin-bottom:3px">客 · '+esc(away)+'</div><div style="font-size:12px;color:#7A6E5F">'+esc(mot.away||'—')+'</div></div></div>';
+  h += '<div class="g2"><div style="background:#E0D5C0;border-radius:8px;padding:10px"><div style="font-size:10px;color:#2E5FA3;font-weight:700;margin-bottom:3px">主 · '+esc(home)+'</div><div style="font-size:12px;color:#7A6E5F">'+esc(mot.home||'—')+'</div></div><div style="background:#E0D5C0;border-radius:8px;padding:10px"><div style="font-size:10px;color:#8B5A9E;font-weight:700;margin-bottom:3px">客 · '+esc(away)+'</div><div style="font-size:12px;color:#7A6E5F">'+esc(mot.away||'—')+'</div></div></div>';
   if(r.news) h += '<div style="font-size:11.5px;color:#A89E8E;margin-top:8px">📋 '+esc(r.news)+'</div>';
   h += '</div>';
 
   // ---- AI预判概率（未校准） ----
   h += '<div class="card"><div style="font-size:12px;color:#A89E8E;font-weight:700;letter-spacing:.1em;margin-bottom:10px">'+(r._market_anchored?'盘口锚定估计（未校准）':'AI预判概率（未校准）')+'</div>';
-  h += '<div style="display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid #DDD3C3">';
+  h += '<div style="display:flex;height:26px;border-radius:7px;overflow:hidden;border:1px solid #C4B394">';
   [[pr.home,'#2E5FA3','主胜'],[pr.draw,'#A89E8E','平'],[pr.away,'#8B5A9E','客胜']].forEach(function(s){
-    h += '<div style="width:'+pct(s[0])+';background:'+s[1]+'33;border-right:1px solid #E8E0D5;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:'+s[1]+';font-weight:700;min-width:0;overflow:hidden;white-space:nowrap">'+(s[0]>0.12?s[2]+' '+pct(s[0]):'')+'</div>';
+    h += '<div style="width:'+pct(s[0])+';background:'+s[1]+'33;border-right:1px solid #D6C9B4;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:'+s[1]+';font-weight:700;min-width:0;overflow:hidden;white-space:nowrap">'+(s[0]>0.12?s[2]+' '+pct(s[0]):'')+'</div>';
   });
   h += '</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#A89E8E;margin-top:4px">主胜 '+pct(pr.home)+' / 平 '+pct(pr.draw)+' / 客胜 '+pct(pr.away)+'</div>';
   
@@ -3018,9 +3029,9 @@ function renderResults(snapData, cornerLookup){
     h += '<div style="font-size:20px;font-weight:900;color:' + gradeColor + ';border:2px solid ' + gradeColor + ';border-radius:8px;padding:1px 14px;letter-spacing:.05em">' + grade + ' 级</div>';
     h += '</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11.5px;margin-bottom:8px">';
-    h += '<div style="background:#F0EAE0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">胜平负</div><div style="font-weight:700;color:' + wlColor + '">' + (wlActive ? '✅ ' : '') + wlDir + '</div></div>';
-    h += '<div style="background:#F0EAE0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">大小球' + (ouGap !== null ? ' 差' + Math.abs(ouGap).toFixed(2) : '') + '</div><div style="font-weight:700;color:' + ouColor + '">' + (ouActive ? '✅ ' : '') + ouDir + '</div></div>';
-    h += '<div style="background:#F0EAE0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">角球</div><div style="font-weight:700;color:' + cornerColor + '">' + (cornerActive ? '✅ ' : cornerConflict ? '⚠️ ' : '') + cornerDir + '</div></div>';
+    h += '<div style="background:#E0D5C0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">胜平负</div><div style="font-weight:700;color:' + wlColor + '">' + (wlActive ? '✅ ' : '') + wlDir + '</div></div>';
+    h += '<div style="background:#E0D5C0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">大小球' + (ouGap !== null ? ' 差' + Math.abs(ouGap).toFixed(2) : '') + '</div><div style="font-weight:700;color:' + ouColor + '">' + (ouActive ? '✅ ' : '') + ouDir + '</div></div>';
+    h += '<div style="background:#E0D5C0;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#A89E8E;margin-bottom:4px">角球</div><div style="font-weight:700;color:' + cornerColor + '">' + (cornerActive ? '✅ ' : cornerConflict ? '⚠️ ' : '') + cornerDir + '</div></div>';
     h += '</div>';
     if (cornerConflict) {
       h += '<div style="font-size:10.5px;color:#C2571B;margin-bottom:6px">⚠️ 角球信号降级：' + cornerConflictNote + '，建议以DB数据为主，谨慎跟推</div>';
@@ -3042,7 +3053,7 @@ function renderResults(snapData, cornerLookup){
       var implied = (mk.odds && mk.odds > 1) ? 1 / mk.odds : null;
       var edge = (mk.p !== null && implied !== null) ? mk.p - implied : null;
       var ec = edgeColor(edge, getMarketType(mk.m));
-      h += '<div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr 1fr;gap:6px;align-items:center;padding:8px 4px;border-bottom:1px solid #DDD3C388">';
+      h += '<div style="display:grid;grid-template-columns:1.4fr .7fr .7fr .7fr 1fr;gap:6px;align-items:center;padding:8px 4px;border-bottom:1px solid #C4B39488">';
       h += '<div><div style="font-size:12.5px;font-weight:600">'+esc(mk.m)+' · '+esc(mk.s)+'</div><div style="font-size:10px;color:#A89E8E">'+esc(mk.note||'')+'</div></div>';
       h += '<div style="font-size:13px;color:#B7791F;font-weight:700;text-align:center" class="num">'+esc(mk.odds||'—')+'</div>';
       h += '<div style="font-size:11.5px;color:#7A6E5F;text-align:center" class="num">'+pct(implied)+'</div>';
@@ -3099,7 +3110,7 @@ function renderResults(snapData, cornerLookup){
 
     if (recLevel.level === 'strong') {
       var mainEdge = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
-      h += '<div style="padding:12px;background:#F0EAE0;border-radius:8px;border:1px solid #2D7D4F55;margin-bottom:10px">';
+      h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #2D7D4F55;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#2D7D4F;font-weight:700;letter-spacing:.08em">✅ 主推（Edge达标）</div>';
       h += '<div style="font-size:18px;font-weight:900;color:#B7791F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#7A6E5F;font-weight:400">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
@@ -3146,7 +3157,7 @@ function renderResults(snapData, cornerLookup){
       h += '</div>';
     } else if (recLevel.level === 'light') {
       var mainEdge2 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
-      h += '<div style="padding:12px;background:#F0EAE0;border-radius:8px;border:1px solid #EA580C55;margin-bottom:10px">';
+      h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #EA580C55;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#C2571B;font-weight:700;letter-spacing:.08em">⚡ 轻注关注（Edge未达阈值，建议小额试探）</div>';
       h += '<div style="font-size:18px;font-weight:900;color:#B7791F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#7A6E5F;font-weight:400">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
@@ -3158,7 +3169,7 @@ function renderResults(snapData, cornerLookup){
       h += '</div>';
     } else if (recLevel.level === 'hint') {
       var mainEdge3 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
-      h += '<div style="padding:12px;background:#F0EAE0;border-radius:8px;border:1px solid #2E5FA344;margin-bottom:10px">';
+      h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #2E5FA344;margin-bottom:10px">';
       h += '<div style="font-size:10px;color:#2E5FA3;font-weight:700;letter-spacing:.08em">📌 倾向提示（正Edge但未达阈值，仅供参考）</div>';
       h += '<div style="font-size:16px;font-weight:700;color:#7A6E5F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:13px;color:#A89E8E">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
@@ -3169,7 +3180,7 @@ function renderResults(snapData, cornerLookup){
       if(main.note) h += '<div style="font-size:11px;color:#A89E8E;margin-top:6px">'+esc(main.note)+'</div>';
       h += '</div>';
     } else {
-      h += '<div style="padding:12px;background:#F0EAE0;border-radius:8px;border:1px solid #94A3B855;margin-bottom:10px">';
+      h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #94A3B855;margin-bottom:10px">';
       h += '<div style="color:#A89E8E;font-weight:700;font-size:16px">⏸️ 观望</div>';
       if (main && main.dir) {
         h += '<div style="font-size:11.5px;color:#7A6E5F;margin-top:4px">'+esc(main.dir)+' Edge为负或概率偏低，暂不推荐</div>';
@@ -3209,7 +3220,7 @@ function renderResults(snapData, cornerLookup){
 
     var whys = rec.why || [];
     if(whys.length > 0){
-      h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #DDD3C3">';
+      h += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #C4B394">';
       h += '<div style="font-size:10px;color:#A89E8E;font-weight:700;letter-spacing:.08em;margin-bottom:4px">📌 推理依据</div>';
       whys.forEach(function(w){ h += '<div style="font-size:11.5px;color:#7A6E5F;padding:2px 0">· '+esc(w)+'</div>'; });
       h += '</div>';
@@ -3472,10 +3483,10 @@ function refreshVerify(){
       ch = '<div class="card" style="margin-bottom:8px">';
       ch += '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px"><div class="num" style="font-size:28px;font-weight:800;color:' + brierColor + '">' + cal.brier.toFixed(4) + '</div><div style="font-size:12px;color:#7A6E5F">Brier 分数（越低越好，0.25 为随机基准）· 样本 N=' + cal.totalN + '</div></div>';
       if(cal.proxy) ch += '<div style="font-size:11px;color:#B7791F;margin-bottom:8px">⚠️ 记录中未存预测概率，用置信分代理，非真实预测概率</div>';
-      ch += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:#A89E8E;text-align:left"><th style="padding:6px 8px;border-bottom:1px solid #DDD3C3">概率区间</th><th style="padding:6px 8px;border-bottom:1px solid #DDD3C3">样本数</th><th style="padding:6px 8px;border-bottom:1px solid #DDD3C3">实际命中率</th></tr></thead><tbody>';
+      ch += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="color:#A89E8E;text-align:left"><th style="padding:6px 8px;border-bottom:1px solid #C4B394">概率区间</th><th style="padding:6px 8px;border-bottom:1px solid #C4B394">样本数</th><th style="padding:6px 8px;border-bottom:1px solid #C4B394">实际命中率</th></tr></thead><tbody>';
       cal.bins.forEach(function(b){
         var hr = b.n > 0 ? Math.round(b.hitRate * 100) + '%' : '—';
-        ch += '<tr><td style="padding:6px 8px;border-bottom:1px solid #FDFBF7">' + b.range + '</td><td style="padding:6px 8px;border-bottom:1px solid #FDFBF7">' + b.n + '</td><td style="padding:6px 8px;border-bottom:1px solid #FDFBF7">' + hr + ' <span style="color:#A89E8E">(' + b.hits + '/' + b.n + ')</span></td></tr>';
+        ch += '<tr><td style="padding:6px 8px;border-bottom:1px solid #EFE7D8">' + b.range + '</td><td style="padding:6px 8px;border-bottom:1px solid #EFE7D8">' + b.n + '</td><td style="padding:6px 8px;border-bottom:1px solid #EFE7D8">' + hr + ' <span style="color:#A89E8E">(' + b.hits + '/' + b.n + ')</span></td></tr>';
       });
       ch += '</tbody></table></div>';
     }
@@ -3505,7 +3516,7 @@ function refreshVerify(){
     h += '</div>';
 
     if(v.model_version) h += '<div style="font-size:11px;color:#7A6E5F">AI估计·未校准 | '+esc(v.model_version)+' | 缺失字段 '+(v.data_gaps||[]).length+'</div>';
-    h += '<div style="background:#F0EAE0;border-radius:8px;padding:10px;margin-bottom:8px">';
+    h += '<div style="background:#E0D5C0;border-radius:8px;padding:10px;margin-bottom:8px">';
     h += '<div style="font-size:10px;color:#A89E8E;font-weight:700;margin-bottom:4px">📌 AI预测</div>';
     h += '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11.5px">';
     h += '<span style="color:#2E5FA3">AI胜平负: <b>' + aiLabel + '</b></span>';
@@ -3526,7 +3537,7 @@ function refreshVerify(){
       h += '</div>';
       h += '<button class="btn-s gold" style="width:100%;padding:6px;font-weight:700" data-vsave="' + v.id + '">✓ 保存结果</button>';
     } else {
-      h += '<div style="background:#F0EAE0;border-radius:8px;padding:10px">';
+      h += '<div style="background:#E0D5C0;border-radius:8px;padding:10px">';
       h += '<div style="font-size:14px;font-weight:700;color:#3E3428;margin-bottom:4px">实际: ' + esc(v.actual_score) + (v.actual_corners !== null ? ' · ' + v.actual_corners + '角球' : '') + '</div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
       if(v.correct_ai_1x2 !== null){
