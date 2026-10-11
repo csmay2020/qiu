@@ -1905,6 +1905,26 @@ function removeVig(overOdds, underOdds) {
   return { overProb: p1 / total, underProb: p2 / total, vig: total - 1 };
 }
 
+// 角球预测三道防线: 限幅 + 收缩 + 标记 (2026-10-11 校准分析后加入)
+// 背景: 59场回测 MAE=3.0, 9场偏差>6 (如17.8→10), 需防离谱预测
+function sanitizeCornerPrediction(expTotal, leagueAvg) {
+  if (expTotal == null || !Number.isFinite(expTotal)) return {value: null, flagged: true, reason: '无效输入'};
+  var v = expTotal;
+  var flagged = false, reason = '';
+  // 1. 限幅: 正常比赛角球总数很少超出 [2, 16]
+  if (v < 2) { v = 2; flagged = true; reason = '低于下限'; }
+  if (v > 16) { v = 16; flagged = true; reason = '高于上限'; }
+  // 2. 收缩: 极端值向联赛均值收缩 (leagueAvg 默认 10)
+  var mean = (leagueAvg && Number.isFinite(leagueAvg)) ? leagueAvg : 10;
+  if (Math.abs(v - mean) > 5) {
+    // 收缩系数 0.5: 17.8 → 10 + (17.8-10)*0.5 = 13.9
+    v = mean + (v - mean) * 0.5;
+    v = Math.round(v * 10) / 10;
+    flagged = true; reason = (reason ? reason + ';' : '') + '极端值收缩';
+  }
+  return {value: Math.round(v*10)/10, flagged: flagged, reason: reason};
+}
+
 function estimateOverProbability(expected, line) {
   // sigma 历史拟合: 角球为计数数据, 采用 Poisson 假设 variance=mean, 故 sigma=sqrt(expected)
   // 替代此前写死的 sigma=2.5 (对所有比赛/球队/均值一刀切, 导致概率系统性跑偏)
