@@ -1171,7 +1171,58 @@ async function loadVerify(){
   }catch(e){ console.warn('[verify] Supabase 加载失败, 用本地数据:', e && e.message); }
   return local;
 }
-function saveVerify(arr){ try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); }catch(e){} }
+function saveVerify(arr){ return saveVerifyResilient(arr); }
+// ---- 验证记录写入（v3 修复）：localStorage 配额满时自动清旧搜索缓存后重试 ----
+// 根因：每次分析把完整搜索上下文（几十KB）存入 match_search_cache_*，越积越多；
+// 配额满后原 saveVerify 静默吞异常 → 当次会话内存正常、一关浏览器记录全丢。
+function evictSearchCache(){
+  try{
+    var keys=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(/^(match_search_cache_|search_cache_v\d+_)/.test(k)){
+        var ts=0;
+        try{ var o=JSON.parse(localStorage.getItem(k)); ts=(o&&o.ts)||0; }catch(e){}
+        keys.push({k:k,ts:ts});
+      }
+    }
+    if(!keys.length) return;
+    var now=Date.now(), removed=0;
+    keys.forEach(function(x){ if(!x.ts||now-x.ts>=86400000){ try{localStorage.removeItem(x.k);}catch(e){} removed++; } });
+    if(removed===0 && keys.length>20){ // 24h 内也太多：只保留最新的 20 个
+      keys.sort(function(a,b){ return b.ts-a.ts; });
+      keys.slice(20).forEach(function(x){ try{localStorage.removeItem(x.k);}catch(e){} });
+    }
+  }catch(e){}
+}
+function saveVerifyResilient(arr){
+  var json;
+  try{ json=JSON.stringify(arr); }catch(e){ console.error('[verify] 序列化失败', e); return false; }
+  try{ localStorage.setItem(VERIFY_KEY, json); return true; }
+  catch(e){
+    evictSearchCache(); // 验证记录优先于缓存：清掉旧缓存后重试一次
+    try{ localStorage.setItem(VERIFY_KEY, json); return true; }
+    catch(e2){ console.error('[verify] 写入失败（配额不足或存储被禁用）', e2); window.__verifySaveFailed=true; return false; }
+  }
+}
+// ---- 存储健康自检（v3 新增）：无痕窗口 / 退出清除数据时顶部弹黄条 ----
+function checkStorageHealth(){
+  var ok=true;
+  try{
+    localStorage.setItem('__vt_probe','1');
+    if(localStorage.getItem('__vt_probe')!=='1') ok=false;
+    localStorage.removeItem('__vt_probe');
+  }catch(e){ ok=false; }
+  if(ok && window.__verifySaveFailed) ok=false;
+  if(!ok && !document.getElementById('vt-storage-warn')){
+    var bar=document.createElement('div');
+    bar.id='vt-storage-warn';
+    bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#FEF3C7;color:#92400E;padding:10px 16px;font-size:13px;text-align:center;border-bottom:1px solid #F59E0B;';
+    bar.textContent='⚠️ 本地存储写入失败：验证记录在关闭浏览器后会丢失。请检查是否在使用无痕窗口，或浏览器设置了"退出时清除网站数据"。';
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  return ok;
+}
 
 // =====================================================================
 // 快照系统
@@ -4046,6 +4097,9 @@ async function init(){
     }
     btn.disabled = false; btn.textContent = '🔍 筛选';
   });
+
+  // v3 新增：存储健康自检（localStorage 不可用时顶部黄条提示，避免验证记录静默丢失）
+  try{ checkStorageHealth(); }catch(e){}
 }
 
 document.addEventListener('DOMContentLoaded', init);
