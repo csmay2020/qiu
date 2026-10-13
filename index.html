@@ -2666,6 +2666,12 @@ function autoAddVerify(r, home, away, cornerLookup){
       return Math.round((ref - ln) * 100) / 100;
     })(),
     filter_line: r.line != null ? r.line : null,
+    cross_competition: (function(){
+      var lg = (ST.league || '').toLowerCase();
+      var leagues = ['ucl','uEL','uecl','欧冠','欧联','欧会杯','champions','europa','conference'];
+      for(var i=0;i<leagues.length;i++){ if(lg.indexOf(leagues[i])>=0) return true; }
+      return false;
+    })(),
     pred_corners_sanitized: (function(){
       var raw = !r._corner_reference_only && r.corners && r.corners.exp_total != null ? r.corners.exp_total : null;
       if (raw == null) return null;
