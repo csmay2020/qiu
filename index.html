@@ -1133,9 +1133,12 @@ function getField(id){ var el = document.getElementById('inp-'+id); return el ? 
 
 function loadLog(){ try{ var r = localStorage.getItem(LOG_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; } }
 function saveLog(arr){ try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); }catch(e){} }
+// ---- v3.1 存储诊断：把"本地几条/内存几条/写入成没成"直接显示在验证页顶部 ----
+window.__vtDiag = window.__vtDiag || { loadLocal: null, loadRemote: null, loadError: null, saveCalls: 0, lastSave: null, lastSaveAt: null, lastSaveErr: null };
 async function loadVerify(){
   var local = [];
   try{ var r = localStorage.getItem(VERIFY_KEY); local = r ? JSON.parse(r) : []; }catch(e){ local = []; }
+  window.__vtDiag.loadLocal = local.length;
   // Supabase 优先: 拉取云端记录, 与本地合并去重 (换设备可恢复)
   try{
     if(typeof DataLoader !== 'undefined' && DataLoader.getRecentPredictions){
@@ -1166,9 +1169,10 @@ async function loadVerify(){
         });
         // 按日期倒序
         local.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
-      }
-    }
-  }catch(e){ console.warn('[verify] Supabase 加载失败, 用本地数据:', e && e.message); }
+        window.__vtDiag.loadRemote = remote.length;
+      } else { window.__vtDiag.loadRemote = 0; }
+    } else { window.__vtDiag.loadRemote = 'n/a'; }
+  }catch(e){ console.warn('[verify] Supabase 加载失败, 用本地数据:', e && e.message); window.__vtDiag.loadError = (e && e.message) || String(e); window.__vtDiag.loadRemote = 'fail'; }
   return local;
 }
 function saveVerify(arr){ return saveVerifyResilient(arr); }
@@ -1196,14 +1200,92 @@ function evictSearchCache(){
   }catch(e){}
 }
 function saveVerifyResilient(arr){
-  var json;
-  try{ json=JSON.stringify(arr); }catch(e){ console.error('[verify] 序列化失败', e); return false; }
-  try{ localStorage.setItem(VERIFY_KEY, json); return true; }
-  catch(e){
-    evictSearchCache(); // 验证记录优先于缓存：清掉旧缓存后重试一次
-    try{ localStorage.setItem(VERIFY_KEY, json); return true; }
-    catch(e2){ console.error('[verify] 写入失败（配额不足或存储被禁用）', e2); window.__verifySaveFailed=true; return false; }
+  var ok=false, err=null, compactUsed=false;
+  var d = window.__vtDiag = window.__vtDiag || {};
+  d.saveCalls = (d.saveCalls||0) + 1;
+  function stamp(){ d.lastSave = ok; d.lastSaveAt = new Date().toLocaleTimeString(); d.lastSaveErr = err; d.compactUsed = compactUsed; }
+  function tryWrite(payload){
+    try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(payload)); return true; }
+    catch(e){ err = (e && e.name ? e.name+': ' : '') + (e && e.message); return false; }
   }
+  if(tryWrite(arr)){ ok=true; err=null; stamp(); return true; }  // 第1轮：完整写入
+  evictHeavyCache();                                               // 清搜索缓存+旧快照
+  if(tryWrite(arr)){ ok=true; err=null; stamp(); return true; }  // 第2轮：完整重试
+  compactUsed = true;                                            // 第3轮：剥离死重字段再写
+  if(tryWrite(arr.map(compactVerifyRecord))){ ok=true; err=null; console.warn('[verify] 已用精简模式保存（剥离 team_profiles_used/evidence_summary）'); }
+  else { console.error('[verify] 写入失败', err); window.__verifySaveFailed=true; }
+  stamp(); return ok;
+}
+// ---- v3.2 落盘精简：team_profiles_used / evidence_summary 写入后无任何读取，属死重
+//     （整份球队档案单条可达上百KB，65 条即撑爆 5MB 配额）。配额不足时落盘自动剥离。
+var VT_DROP_FIELDS = ['team_profiles_used', 'evidence_summary'];
+function compactVerifyRecord(v){
+  if(!v || typeof v !== 'object') return v;
+  var c = {};
+  for(var k in v){ if(VT_DROP_FIELDS.indexOf(k) < 0) c[k] = v[k]; }
+  return c;
+}
+// ---- v3.2 兜底清理：搜索缓存 + 旧快照（验证记录优先级最高，快照只保留最新 15 个）----
+function evictHeavyCache(){
+  evictSearchCache();
+  try{
+    var keys=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k && k.indexOf('odds_snapshot_v3_') === 0){
+        var ts=0, m=/(\d{4}-\d{2}-\d{2})/.exec(k);
+        if(m) ts = new Date(m[1]).getTime();
+        keys.push({k:k,ts:ts});
+      }
+    }
+    if(keys.length > 15){
+      keys.sort(function(a,b){ return b.ts-a.ts; });
+      keys.slice(15).forEach(function(x){ try{localStorage.removeItem(x.k);}catch(e){} });
+    }
+  }catch(e){}
+}
+// ---- v3.3 云端重试：Key 面板填完 key 后点一下即重拉云端，无需刷新页面 ----
+async function vtRetryCloud(){
+  var d = window.__vtDiag = window.__vtDiag || {};
+  d.loadError = null;
+  try{
+    if(typeof DataLoader === 'undefined' || !DataLoader.getRecentPredictions) throw new Error('DataLoader 未就绪');
+    var remote = await DataLoader.getRecentPredictions(200);
+    d.loadRemote = remote ? remote.length : 0;
+    var seen = {};
+    ST.verify.forEach(function(v){ if(v.id) seen[v.id] = true; });
+    (remote || []).forEach(function(p){
+      var id = p.match_date + '|' + p.home_team + '|' + p.away_team;
+      if(!seen[id]){
+        seen[id] = true;
+        ST.verify.push({
+          id: id, match: (p.home_team||'') + ' vs ' + (p.away_team||''), date: p.match_date,
+          league: p.league_code, home: p.home_team, away: p.away_team,
+          pred_corners_total: p.pred_corners, pred_corner_direction: p.pred_direction,
+          conf_score: p.pred_confidence, ai_pred_1x2: p.ai_1x2, pred_score: p.pred_score,
+          analysis_at: p.created_at, _from_supabase: true
+        });
+      }
+    });
+    d.loadLocal = ST.verify.length;
+    saveVerify(ST.verify);
+  }catch(e){ d.loadError = (e && e.message) || String(e); d.loadRemote = 'fail'; }
+  refreshVerify();
+}
+// ---- v3.1 存储诊断条渲染 ----
+function vtDiagHTML(){
+  var d = window.__vtDiag || {};
+  var memN = (typeof ST !== 'undefined' && ST.verify) ? ST.verify.length : -1;
+  var p = [];
+  p.push('💾 <b>v3.3 存储诊断</b>');
+  p.push('本地 localStorage: ' + (d.loadLocal==null ? '?' : d.loadLocal + ' 条'));
+  p.push('内存: ' + memN + ' 条');
+  if(d.loadRemote != null && d.loadRemote !== 'n/a') p.push('云端合并: ' + d.loadRemote);
+  if(d.loadError) p.push('<span style="color:#C0392B">加载异常: ' + esc(String(d.loadError)).slice(0,80) + '</span>');
+  if(d.loadRemote === 'fail') p.push('<button onclick="vtRetryCloud()" style="margin-left:4px;padding:2px 10px;border-radius:999px;border:1px solid #C4B394;background:#fff;cursor:pointer;font-size:12px;color:#7A6E5F">🔄 重试云端同步</button>');
+  if(d.saveCalls) p.push('本次写入 ' + d.saveCalls + ' 次: ' + (d.lastSave ? '<span style="color:#2D7D4F">✓ 成功</span>' : '<span style="color:#C0392B">✗ 失败 ' + esc(String(d.lastSaveErr||'')).slice(0,80) + '</span>') + (d.compactUsed ? '（精简模式）' : '') + (d.lastSaveAt ? ' (' + d.lastSaveAt + ')' : ''));
+  else p.push('本次尚无写入动作');
+  return '<div class="card" style="font-size:12px;color:#7A6E5F;background:#FDFBF7;border:1px dashed #C4B394;margin-bottom:10px">' + p.join(' ｜ ') + '</div>';
 }
 // ---- 存储健康自检（v3 新增）：无痕窗口 / 退出清除数据时顶部弹黄条 ----
 function checkStorageHealth(){
@@ -3585,7 +3667,7 @@ function refreshVerify(){
 
   // ---- 验证记录列表 ----
   if(ST.verify.length === 0){
-    area.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:#A89E8E">还没有验证记录</div>';
+    area.innerHTML = vtDiagHTML() + '<div class="card" style="text-align:center;padding:20px;color:#A89E8E">还没有验证记录</div>';
     return;
   }
 
@@ -3656,7 +3738,7 @@ function refreshVerify(){
     h += '</div>';
   });
 
-  area.innerHTML = h;
+  area.innerHTML = vtDiagHTML() + h;
 }
 
 function refreshLog(){
@@ -3819,10 +3901,13 @@ async function renderLeaguesAndContext() {
 // init 函数
 // =====================================================================
 async function init(){
+  // v3.3 修复：先装载 Supabase key（loadVerify 拉云端要用）。之前 key 在 loadVerify 之后才赋值，
+  // 导致每次打开页面拉云端时 key 都是空的，永远 401 "No API key found"。
+  var supabaseKey = (localStorage.getItem('supabase_key') || '').trim();
+  if (supabaseKey) window.SUPABASE_ANON_KEY = supabaseKey;
   ST.log = loadLog(); ST.verify = await loadVerify();
-  
+
   // 从 localStorage 加载配置
-  var supabaseKey = localStorage.getItem('supabase_key') || '';
   var dsKey = localStorage.getItem('ds_key') || '';
   var unsearchKey = localStorage.getItem('unsearch_key') || '';
   var tavilyKey = localStorage.getItem('tavily_key') || '';
@@ -3833,8 +3918,7 @@ async function init(){
   var savedLeague = localStorage.getItem('vt_league') || '英超';
   var savedContext = localStorage.getItem('vt_context') || 'regular';
 
-  // 应用保存的状态
-  if (supabaseKey) window.SUPABASE_ANON_KEY = supabaseKey;
+  // 应用保存的状态（supabaseKey 已在 init 开头装载，此处不再重复）
   ST.league = savedLeague;
   ST.context = savedContext;
   ST.dsKey = dsKey;
@@ -3928,8 +4012,9 @@ async function init(){
 
   // Key 输入监听
   document.getElementById('supabase-key-inp').addEventListener('input', function(){
-    localStorage.setItem('supabase_key', this.value);
-    window.SUPABASE_ANON_KEY = this.value;
+    var k = this.value.trim();
+    localStorage.setItem('supabase_key', k);
+    window.SUPABASE_ANON_KEY = k;
     updateKeyUI();
     // 重新加载联赛列表和 LEAGUE_CODE_MAP（key 可能在 init 后才填入）
     if (this.value.length > 20) renderLeaguesAndContext();
