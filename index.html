@@ -1095,6 +1095,12 @@ var CTXS = [
   {v:'cup_ko', l:'杯赛淘汰赛(单场淘汰)'},
   {v:'cup_leg1', l:'杯赛两回合·第一回合'},
   {v:'cup_leg2', l:'⚠️ 杯赛两回合·第二回合(动机扭曲)'},
+  {v:'ucl_league', l:'欧冠·联赛阶段'},
+  {v:'ucl_playoff', l:'欧冠·附加赛(两回合)'},
+  {v:'ucl_r16', l:'欧冠·16强(两回合)'},
+  {v:'ucl_qf', l:'欧冠·8强(两回合)'},
+  {v:'ucl_sf', l:'欧冠·半决赛(两回合)'},
+  {v:'ucl_final', l:'欧冠·决赛(单场中立)'},
   {v:'derby', l:'⚠️ 德比战'},
   {v:'new_coach', l:'⚠️ 新教练首秀'},
   {v:'new_coach_early', l:'⚠️ 新帅磨合期(第2-4场·反弹风险)'},
@@ -2394,6 +2400,8 @@ async function analyze(){
   var home = getField('home'), away = getField('away');
   if(!home || !away){ alert('请填写主客队名称'); return; }
   var lgCode = LEAGUE_CODE_MAP[ST.league] || null;
+  // 洲际赛事: 不限制联赛，全库按队名搜
+  if(lgCode && /^(ucl|uel|uecl|worldcup)$/i.test(lgCode)) lgCode = null;
   console.log('lgCode:', lgCode, 'ST.league:', ST.league);
 
   // ---- 打印规范化后的球队名（用于调试） ----
@@ -4188,8 +4196,11 @@ document.addEventListener('DOMContentLoaded',function(){
   const panel=document.getElementById('corner-reference-panel');btn.disabled=true;
   panel.textContent='正在读取角球样本…';
   try{
-   globalThis.DataLoader.clearCache();const league=LEAGUE_CODE_MAP[ST.league]||null;
-   const lookup=await CornerEngine.lookupCorners(league,getField('home'),getField('away'));
+   globalThis.DataLoader.clearCache();
+   var _lg = LEAGUE_CODE_MAP[ST.league]||null;
+   // 洲际赛事: 不限制联赛，全库按队名搜 (ucl/uel/uecl/世界杯等)
+   if(_lg && /^(ucl|uel|uecl|worldcup)$/i.test(_lg)) _lg = null;
+   const lookup=await CornerEngine.lookupCorners(_lg,getField('home'),getField('away'));
    if(!lookup){panel.textContent='未找到唯一球队赛季，请检查联赛、队名和赛季选择。';return;}
    let html='<div class="card"><b>角球截图样本参考</b>';
    ['home','away'].forEach(function(side){const t=lookup[side];
