@@ -136,13 +136,41 @@
     return ids.size === 1 ? teams.find(t => ids.has(t.id)) || null : null;
   }
 
+  // 本地中文别名 -> team_name 映射 (Supabase 401 时兜底)
+  var LOCAL_ALIAS_MAP = {
+    '巴黎圣日耳曼': 'PSG', '巴黎圣日耳门': 'PSG', '大巴黎': 'PSG',
+    '曼城': '曼城', '曼联': '曼联',
+    '皇马': '皇家马德里', '巴萨': '巴塞罗那', '马竞': '马德里竞技',
+    '拜仁': '拜仁慕尼黑', '多特': '多特蒙德',
+    '国米': '国际米兰', '米兰': 'AC米兰', '尤文': '尤文图斯',
+    '阿森纳': '阿森纳', '利物浦': '利物浦', '切尔西': '切尔西', '热刺': '托特纳姆热刺',
+    '博德闪耀': '博德闪耀', '博德': '博德闪耀'
+  };
   async function findTeamAnywhere(teamName) {
-    const found = [];
-    for (const league of await getLeagues()) {
-      const team = await findTeam(league.league_code, teamName);
-      if (team) found.push(team);
+    console.log('[findTeamAnywhere] 查找:', teamName);
+    // 先查本地别名映射
+    var normalized = LOCAL_ALIAS_MAP[teamName] || teamName;
+    if(normalized !== teamName) console.log('[findTeamAnywhere] 别名转换:', teamName, '->', normalized);
+    teamName = normalized;
+    var codes = [];
+    try {
+      if(typeof LEAGUE_CODE_MAP !== 'undefined'){
+        for(var k in LEAGUE_CODE_MAP){ var v = LEAGUE_CODE_MAP[k]; if(v && codes.indexOf(v) < 0) codes.push(v); }
+      }
+    } catch(e){ console.log('[findTeamAnywhere] LEAGUE_CODE_MAP 读取失败:', e); }
+    if(!codes.length){
+      codes = ['premier_league','la_liga','serie_a','bundesliga','ligue_1','mls','mexico','brasileirao','argentina','norway','sweden'];
+      console.log('[findTeamAnywhere] 用硬编码联赛表');
     }
-    return found.length === 1 ? found[0] : null;
+    console.log('[findTeamAnywhere] 联赛列表:', codes.join(','));
+    for(var i=0;i<codes.length;i++){
+      try {
+        var team = await findTeam(codes[i], teamName);
+        if(team){ console.log('[findTeamAnywhere] 在', codes[i], '找到:', team.team_name); return team; }
+      } catch(e){ console.log('[findTeamAnywhere]', codes[i], '出错:', e.message); }
+    }
+    console.log('[findTeamAnywhere] 未找到:', teamName);
+    return null;
   }
 
   // ── team_aliases ──────────────────────────────────────────
@@ -161,7 +189,7 @@
    */
   async function resolveTeamName(rawName, leagueCode) {
     if (!rawName) return rawName;
-    const team = leagueCode ? await findTeam(leagueCode, rawName) : null;
+    const team = leagueCode ? await findTeam(leagueCode, rawName) : await findTeamAnywhere(rawName);
     return team ? team.team_name : rawName.trim();
   }
 
@@ -378,7 +406,38 @@
   }
 
   async function lookupCorners(leagueCode, homeTeam, awayTeam) {
-    if (!leagueCode) return null;
+    var _getStats = async function(teamName, lc){
+      if(lc) return await DL.getCornerStats(lc, teamName);
+      // 联赛为 null (洲际赛事): 先全库找球队，直接取其 corners 属性
+      var t = await findTeamAnywhere(teamName);
+      if(!t) return null;
+      var attrs = (t.team_attributes || []).filter(function(a){ return a.attribute_type === 'corners'; });
+      if(attrs.length < 1) return null;
+      var a0 = attrs[0];
+      return { ...a0, team_name: t.team_name, team_id: t.id,
+        league_code: t.league_code, season: t.season,
+        matches_played: t.matches_played, team_updated_at: t.updated_at };
+    };
+    if (!leagueCode){
+      const [hs, as] = await Promise.all([_getStats(homeTeam, null), _getStats(awayTeam, null)]);
+      // 复用下面的 entry 逻辑，手动构造
+      function number(v) { return v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null; }
+      function entry(s, venue) {
+        if (!s) return null;
+        const vf = number(s[venue + '_avg_for']), va = number(s[venue + '_avg_against']);
+        const venueReady = vf != null && va != null;
+        const avg = venueReady ? vf : number(s.avg_for);
+        const against = venueReady ? va : number(s.avg_against);
+        if (avg == null) return null;
+        return { team: s.team_name, teamId: s.team_id, avg, against,
+          season: s.season || null, sampleSize: number(s.matches_played),
+          scope: venueReady ? venue : 'overall', updatedAt: s.updated_at || null };
+      }
+      const home = entry(hs, 'home'), away = entry(as, 'away');
+      if (!home && !away) return null;
+      return { home, away, total: null, method: null, historicalOnly: true,
+        warning: '跨联赛取数（洲际赛事），历史均值仅供参考。' };
+    }
     const [hs, as] = await Promise.all([DL.getCornerStats(leagueCode, homeTeam), DL.getCornerStats(leagueCode, awayTeam)]);
     function number(v) { return v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null; }
     function entry(s, venue) {
@@ -554,7 +613,7 @@ const DL=global.DataLoader;
 DL.getTeams=async league=>league?data(league):[];
 DL.findTeam=async(league,name)=>uniqueTeam(await DL.getTeams(league),name);
 DL.resolveTeamName=async(name,league)=>{const t=league?await DL.findTeam(league,name):null;return t?t.team_name:String(name||'').trim();};
-DL.findTeamAnywhere=async()=>null;
+DL.findTeamAnywhere=async(name)=>{var n=normalize(String(name||'').trim());if(!n)return null;var targets=NAME_CATALOG.filter(function(t){return (t.aliases||[]).some(function(a){return normalize(a)===n;});});if(targets.length!==1)return null;var items=await DL.getTeams(targets[0].league_code);return uniqueTeam(items,name);};
 DL.getCornerStats=async(league,name)=>{
  if(!league)return null;const t=await DL.findTeam(league,name);if(!t)return null;
  const all=t.all_stats,h=t.home_stats,a=t.away_stats;if(!all)return null;
@@ -587,7 +646,18 @@ function entry(t,venue){if(!t)return null;const v=t[venue+'_stats'],all=t.all_st
  approvedMatchCount:all.approved_match_count,source:t.sourceLabel,seasonBasis:t.season_basis};}
 const CE=global.CornerEngine;
 CE.lookupCorners=async(league,homeName,awayName)=>{
- if(!league)return null;
+ if(!league){
+  // v17: 洲际赛事（ucl/uel/uecl/worldcup）联赛限制已置空 —— 全库按队名定位后取各自联赛的角球统计；全程本地，零 Supabase 依赖
+  var _ht=await DL.findTeamAnywhere(homeName),_at=await DL.findTeamAnywhere(awayName);
+  if(!_ht&&!_at)return null;
+  var _hs=_ht?await DL.getCornerStats(_ht.league_code,_ht.team_name):null;
+  var _as=_at?await DL.getCornerStats(_at.league_code,_at.team_name):null;
+  if(!_hs&&!_as)return null;
+  var _model=estimate(_hs,_as);
+  return {home:entry(_hs,'home'),away:entry(_as,'away'),total:_model?_model.total:null,method:_model?_model.method:null,
+   historicalOnly:true,modelCalibrated:false,model:_model,
+   warning:'跨联赛取数（洲际赛事），历史均值仅供参考；截图样本参考，未通过正式比赛范围核验及概率回测。'};
+ }
  const [h,a]=await Promise.all([DL.getCornerStats(league,homeName),DL.getCornerStats(league,awayName)]);
  const hr=reportSummary(league,homeName),ar=reportSummary(league,awayName);if(!h&&!a&&!hr&&!ar)return null;const model=estimate(h,a);
  return {home:entry(h,'home')||(hr?{team:hr.team,season:hr.season,reportOnly:true,reportSummary:hr}:null),away:entry(a,'away')||(ar?{team:ar.team,season:ar.season,reportOnly:true,reportSummary:ar}:null),total:model?model.total:null,method:model?model.method:null,
@@ -817,8 +887,10 @@ g.TeamProfiles={select,pair,summarize,goalSummary,version,digest,events,addEvent
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-s" id="key-show">显示Keys</button>
+      <button class="btn-s" id="key-test" title="一键检测 Supabase key 是否有效、是否和当前项目匹配">🧪 测试连接</button>
       <button class="btn-s red" id="key-clear">清除Keys</button>
     </div>
+    <div id="key-test-result" style="font-size:11px;color:#7A6E5F;margin-top:6px;line-height:1.6"></div>
     <div style="font-size:10.5px;color:#A89E8E;margin-top:6px">Keys保存在本地浏览器</div>
   </div>
 </div>
@@ -3679,6 +3751,51 @@ function toggleKeyPanel(){
   arrow.textContent = open ? '▲' : '▼';
 }
 
+// ── v18: Supabase 连接一键自检 ──────────────────────────────────
+// 区分四种情况：key 没填上 / key 与项目对不上 / 网络问题 / 连接正常。
+// 不打印 key 明文，只显示长度与 JWT 里的项目 ref。
+async function testSupabaseConnection(){
+  var box = document.getElementById('key-test-result');
+  var say = function(html){ if(box) box.innerHTML = html; };
+  var url = window.SUPABASE_URL || 'https://dosrjoxtajpggvxogbvw.supabase.co';
+  var key = (window.SUPABASE_ANON_KEY || '').trim();
+  var urlRef = (url.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/) || [])[1] || '(未知)';
+
+  if (!key) {
+    say('❌ <b>key 没填上</b>：输入框是空的或只含空白。去 Supabase → Settings → API 复制 <b>anon / public</b> key 粘贴进来（注意别复制成 service_role）。');
+    return;
+  }
+  // 从 JWT payload 读项目 ref，与 URL 子域名比对（能抓出"拿 Owl 项目的 key 填到角球库"的串项）
+  var keyRef = '(解不出来)';
+  try {
+    var payload = JSON.parse(atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if (payload && payload.ref) keyRef = payload.ref;
+  } catch(e) {}
+  var refLine = 'key 长度 ' + key.length + ' 字符 · key 归属项目 <b>' + keyRef + '</b> · 页面连接 <b>' + urlRef + '</b>';
+  if (keyRef !== '(解不出来)' && keyRef !== urlRef) {
+    say('❌ <b>key 和项目对不上</b>：' + refLine + '。<br>你有两个 Supabase 项目（Owl 新加坡 / 角球库），key 贴串了。去角球库项目（' + urlRef + '）的 Settings → API 重新复制 anon key。');
+    return;
+  }
+  say('⏳ 正在请求 ' + urlRef + ' …（' + refLine + '）');
+  try {
+    var res = await fetch(url + '/rest/v1/predictions?select=id&limit=1', {
+      headers: { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Accept': 'application/json' }
+    });
+    var bodyText = await res.text();
+    if (res.ok) {
+      say('✅ <b>连接正常</b>：' + refLine + '，/rest/v1 返回 ' + res.status + '。key 有效且项目匹配——之前 401 若还出现，把当时的报错截图发我。');
+    } else if (res.status === 401 && /no api key/i.test(bodyText)) {
+      say('❌ <b>请求没带上 key</b>（401 No API key）：' + refLine + '。<br>key 已填但请求头里没有——刷新页面重试；若还不行，把这次测试结果截图发我。');
+    } else if (res.status === 401) {
+      say('❌ <b>key 无效</b>（401 ' + bodyText.slice(0,120) + '）：' + refLine + '。<br>key 被项目拒绝：可能复制时多带了空格/换行、或 key 已被轮换。去项目 Settings → API 重新复制。');
+    } else {
+      say('⚠️ 返回 ' + res.status + '：' + bodyText.slice(0,150) + '<br>' + refLine + '——key 已送达但被拒绝，把这行截图发我。');
+    }
+  } catch(e) {
+    say('❌ <b>网络没通</b>：' + e.message + '<br>' + refLine + '。检查网络/VPN，或确认项目 URL 没填错。');
+  }
+}
+
 function updateEngineStatus(){
   var engine = document.querySelector('input[name="ocrEngine"]:checked');
   if(!engine) return;
@@ -3900,12 +4017,17 @@ async function init(){
 
   // Key 输入监听
   document.getElementById('supabase-key-inp').addEventListener('input', function(){
-    localStorage.setItem('supabase_key', this.value);
-    window.SUPABASE_ANON_KEY = this.value;
+    var v = this.value.trim(); // v18: 粘贴常带多余空格/换行，会直接导致 401 Invalid API key
+    localStorage.setItem('supabase_key', v);
+    window.SUPABASE_ANON_KEY = v;
     updateKeyUI();
+    // key 变更后清掉 DataLoader 缓存 (之前 401 的失败结果不能留)
+    try{ if(typeof DL !== 'undefined' && DL.clearCache) DL.clearCache(); }catch(e){}
+    try{ if(typeof globalThis.DataLoader !== 'undefined' && globalThis.DataLoader.clearCache) globalThis.DataLoader.clearCache(); }catch(e){}
     // 重新加载联赛列表和 LEAGUE_CODE_MAP（key 可能在 init 后才填入）
     if (this.value.length > 20) renderLeaguesAndContext();
   });
+  document.getElementById('key-test').addEventListener('click', testSupabaseConnection);
   document.getElementById('ds-key-inp').addEventListener('input', function(){
     localStorage.setItem('ds_key', this.value);
     ST.dsKey = this.value;
@@ -4199,9 +4321,41 @@ document.addEventListener('DOMContentLoaded',function(){
    globalThis.DataLoader.clearCache();
    var _lg = LEAGUE_CODE_MAP[ST.league]||null;
    // 洲际赛事: 不限制联赛，全库按队名搜 (ucl/uel/uecl/世界杯等)
-   if(_lg && /^(ucl|uel|uecl|worldcup)$/i.test(_lg)) _lg = null;
-   const lookup=await CornerEngine.lookupCorners(_lg,getField('home'),getField('away'));
-   if(!lookup){panel.textContent='未找到唯一球队赛季，请检查联赛、队名和赛季选择。';return;}
+   var _isCross = _lg && /^(ucl|uel|uecl|worldcup)$/i.test(_lg);
+   if(_isCross) _lg = null;
+   var lookup;
+   if(_isCross){
+     // 跨赛事: 手动全库找球队 + 取角球数 (绕过 CornerEngine 的联赛限制)
+     var DL = globalThis.DataLoader;
+     // 本地别名转换 (Supabase 401 时 findTeamAnywhere 内部别名表不可用)
+     var _aliasMap = {'巴黎圣日耳曼':'PSG','巴黎圣日尔曼':'PSG','巴黎圣日耳门':'PSG','巴黎圣日尔门':'PSG','大巴黎':'PSG','皇马':'皇家马德里','巴萨':'巴塞罗那','马竞':'马德里竞技','拜仁':'拜仁慕尼黑','多特':'多特蒙德','国米':'国际米兰','米兰':'AC米兰','尤文':'尤文图斯','热刺':'托特纳姆热刺','博德':'博德闪耀'};
+     var _hName = getField('home'), _aName = getField('away');
+     _hName = _aliasMap[_hName] || _hName;
+     _aName = _aliasMap[_aName] || _aName;
+     console.log('[cross] 别名转换后:', _hName, 'vs', _aName);
+     var hTeam = await DL.findTeamAnywhere(_hName);
+     var aTeam = await DL.findTeamAnywhere(_aName);
+     console.log('[cross] home:', hTeam ? hTeam.team_name : '未找到', 'away:', aTeam ? aTeam.team_name : '未找到');
+     if(!hTeam && !aTeam){ panel.textContent='未找到唯一球队赛季，请检查联赛、队名和赛季选择。'; return; }
+     var hStats = hTeam ? await DL.getCornerStats(hTeam.league_code, hTeam.team_name) : null;
+     var aStats = aTeam ? await DL.getCornerStats(aTeam.league_code, aTeam.team_name) : null;
+     var mkEntry = function(s, venue){
+       if(!s) return null;
+       var vf = s[venue+'_avg_for'], va = s[venue+'_avg_against'];
+       var avg = (vf != null && va != null) ? vf : s.avg_for;
+       var against = (vf != null && va != null) ? va : s.avg_against;
+       if(avg == null) return null;
+       return { team: s.team_name, season: s.season, avg: avg, against: against,
+         sampleSize: s.matches_played, visualReviewedCount: 0, approvedMatchCount: 0,
+         scope: venue, source: '跨联赛取数（洲际赛事）' };
+     };
+     lookup = { home: mkEntry(hStats, 'home'), away: mkEntry(aStats, 'away'),
+       total: null, method: null, historicalOnly: true,
+       warning: '跨联赛取数（洲际赛事），历史均值仅供参考。' };
+   } else {
+     lookup = await CornerEngine.lookupCorners(_lg,getField('home'),getField('away'));
+   }
+   if(!lookup || (!lookup.home && !lookup.away)){panel.textContent='未找到唯一球队赛季，请检查联赛、队名和赛季选择。';return;}
    let html='<div class="card"><b>角球截图样本参考</b>';
    ['home','away'].forEach(function(side){const t=lookup[side];
     if(!t){html+='<p>'+ (side==='home'?'主队':'客队')+'：数据不足或存在赛季歧义</p>';return;}
