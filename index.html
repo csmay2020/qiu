@@ -19,7 +19,7 @@
 
   // 在调用时读取（而非初始化时），确保用户在 window.SUPABASE_* 中填入值后立即生效
   function getURL() { return global.SUPABASE_URL || 'https://dosrjoxtajpggvxogbvw.supabase.co'; }
-  function getKey() { return global.SUPABASE_ANON_KEY || ''; }
+  function getKey() { return global.SUPABASE_ANON_KEY || (typeof localStorage !== 'undefined' ? (localStorage.getItem('supabase_key') || '') : '') || ''; }
 
   /** 通用 REST 请求（GET） */
   async function supabaseGet(table, params = {}) {
