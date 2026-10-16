@@ -3454,9 +3454,19 @@ function saveActual(id, score, corners){
   refreshVerify();
 }
 
-function delVerify(id){
+async function delVerify(id){
   ST.verify = ST.verify.filter(function(v){ return v.id !== id; });
   saveVerify(ST.verify);
+  // 同步删 Supabase
+  try {
+    var key = (typeof localStorage !== 'undefined' ? localStorage.getItem('supabase_key') : '') || window.SUPABASE_ANON_KEY || '';
+    if(key){
+      await fetch('https://dosrjoxtajpggvxogbvw.supabase.co/rest/v1/predictions?id=eq.' + id, {
+        method: 'DELETE',
+        headers: { 'apikey': key, 'Authorization': 'Bearer ' + key }
+      });
+    }
+  } catch(e){ console.log('[delVerify] Supabase 删除失败:', e.message); }
   refreshVerify();
 }
 
@@ -3670,23 +3680,23 @@ function refreshVerify(){
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
       if(v.correct_ai_1x2 !== null){
         var c1 = v.correct_ai_1x2 ? '#2D7D4F' : '#C0392B';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c1 + '55;background:' + c1 + '14;color:' + c1 + ';font-size:11px;font-weight:700">' + (v.correct_ai_1x2 ? '✓' : '✗') + ' AI-胜平负</span>';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c1 + '55;background:' + c1 + '14;color:' + c1 + ';font-size:11px;font-weight:700">' + (!v.actual_score?'·':(v.correct_ai_1x2==null?'·':(v.correct_ai_1x2?'✓':'✗'))) + ' AI-胜平负</span>';
       }
       if(v.correct_sys_1x2 !== null){
         var c2 = v.correct_sys_1x2 ? '#2D7D4F' : '#C0392B';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c2 + '55;background:' + c2 + '14;color:' + c2 + ';font-size:11px;font-weight:700">' + (v.correct_sys_1x2 ? '✓' : '✗') + ' 系统-胜平负</span>';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c2 + '55;background:' + c2 + '14;color:' + c2 + ';font-size:11px;font-weight:700">' + (!v.actual_score?'·':(v.correct_sys_1x2==null?'·':(v.correct_sys_1x2?'✓':'✗'))) + ' 系统-胜平负</span>';
       }
       if(v.correct_over25 !== null){
         var c3 = v.correct_over25 ? '#2D7D4F' : '#C0392B';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c3 + '55;background:' + c3 + '14;color:' + c3 + ';font-size:11px;font-weight:700">' + (v.correct_over25 ? '✓' : '✗') + ' 大小球</span>';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c3 + '55;background:' + c3 + '14;color:' + c3 + ';font-size:11px;font-weight:700">' + (!v.actual_score?'·':(v.correct_over25==null?'·':(v.correct_over25?'✓':'✗'))) + ' 大小球</span>';
       }
       if(v.correct_corners !== null){
         var c4 = v.correct_corners ? '#2D7D4F' : '#C0392B';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c4 + '55;background:' + c4 + '14;color:' + c4 + ';font-size:11px;font-weight:700">' + (v.correct_corners ? '✓' : '✗') + ' 角球</span>';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c4 + '55;background:' + c4 + '14;color:' + c4 + ';font-size:11px;font-weight:700">' + (!v.actual_score?'·':(v.correct_corners==null?'·':(v.correct_corners?'✓':'✗'))) + ' 角球</span>';
       }
       if(v.correct_score !== null){
         var c5 = v.correct_score ? '#2D7D4F' : '#C0392B';
-        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c5 + '55;background:' + c5 + '14;color:' + c5 + ';font-size:11px;font-weight:700">' + (v.correct_score ? '✓' : '✗') + ' 比分</span>';
+        h += '<span style="padding:2px 8px;border-radius:999px;border:1px solid ' + c5 + '55;background:' + c5 + '14;color:' + c5 + ';font-size:11px;font-weight:700">' + (!v.actual_score?'·':(v.correct_score==null?'·':(v.correct_score?'✓':'✗'))) + ' 比分</span>';
       }
       h += '</div></div>';
       h += '<button class="btn-s small" style="margin-top:6px" data-vreset="' + v.id + '">重新填写</button>';
