@@ -1223,21 +1223,42 @@ function saveLog(arr){ try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); 
 async function loadVerify(){
   var local = [];
   try{ var r = localStorage.getItem(VERIFY_KEY); local = r ? JSON.parse(r) : []; }catch(e){ local = []; }
-  // Supabase 优先: 拉取云端记录, 与本地合并去重 (换设备可恢复)
+  // v34: 去重键只用对阵名归一化 (小写/合并空格), 不带日期。同场在本地存的是分析日、云端存的是比赛日, v33 带日期仍对不上 (如 HAMKAM 10-13 已结算 vs hamKam 10-18 云端副本)。
+  function normMatch(m){ return (m || '').toLowerCase().replace(/\s+/g,' ').trim(); }
+  function keyOfLocal(v){ return normMatch(v.match || ((v.home||'') + ' vs ' + (v.away||''))); }
+  var SETTLE_FIELDS = ['actual_score','actual_corners','actual_1x2','actual_over25','correct_ai_1x2','correct_sys_1x2','correct_score','correct_over25','correct_corners'];
+  function mergeDup(dst, src){
+    SETTLE_FIELDS.forEach(function(k){ if((dst[k] === null || dst[k] === undefined) && src[k] !== null && src[k] !== undefined) dst[k] = src[k]; });
+    return dst;
+  }
+  function dedupe(list){
+    var map = {}, order = [];
+    list.forEach(function(v){
+      var k = keyOfLocal(v);
+      if(!map[k]){ map[k] = v; order.push(k); return; }
+      var cur = map[k];
+      function rank(x){ return (x.actual_score ? 2 : 0) + (x._from_supabase ? 0 : 1); }
+      if(rank(v) > rank(cur)){ map[k] = mergeDup(v, cur); }
+      else { mergeDup(cur, v); }
+    });
+    return order.map(function(k){ return map[k]; });
+  }
+  local = dedupe(local);
+  // Supabase: 拉取云端记录, 按同一键合并 (换设备可恢复)
   try{
     if(typeof DataLoader !== 'undefined' && DataLoader.getRecentPredictions){
       var remote = await DataLoader.getRecentPredictions(200);
       if(remote && remote.length){
         var seen = {};
-        local.forEach(function(v){ if(v.id) seen[v.id] = true; });
-        // 云端记录转本地格式 (只取有 match 标识的)
+        local.forEach(function(v){ seen[keyOfLocal(v)] = true; });
         remote.forEach(function(p){
-          var id = p.match_date + '|' + p.home_team + '|' + p.away_team;
-          if(!seen[id]){
-            seen[id] = true;
+          var matchStr = (p.home_team||'') + ' vs ' + (p.away_team||'');
+          var k = normMatch(matchStr);
+          if(!seen[k]){
+            seen[k] = true;
             local.push({
-              id: id,
-              match: (p.home_team||'') + ' vs ' + (p.away_team||''),
+              id: (p.match_date||'') + '|' + matchStr,
+              match: matchStr,
               date: p.match_date,
               league: p.league_code,
               home: p.home_team, away: p.away_team,
@@ -1251,11 +1272,13 @@ async function loadVerify(){
             });
           }
         });
-        // 按日期倒序
         local.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
       }
     }
   }catch(e){ console.warn('[verify] Supabase 加载失败, 用本地数据:', e && e.message); }
+  local = dedupe(local);
+  // 去重结果写回本地, 清掉历史重复副本
+  try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(local)); }catch(e){}
   return local;
 }
 function saveVerify(arr){ try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); }catch(e){} }
@@ -3449,16 +3472,22 @@ function saveActual(id, score, corners){
 }
 
 async function delVerify(id){
+  var rec = null;
+  ST.verify.forEach(function(v){ if(String(v.id) === String(id)) rec = v; });
   ST.verify = ST.verify.filter(function(v){ return String(v.id) !== String(id); });
   saveVerify(ST.verify);
-  // 同步删 Supabase
+  // 同步删 Supabase: v34 改按主客队删。旧逻辑按 id 删, 本地时间戳/复合 id 对不上云端数字 id, 云端行永远删不掉, 重开又被拉回来。
   try {
     var key = (typeof localStorage !== 'undefined' ? localStorage.getItem('supabase_key') : '') || window.SUPABASE_ANON_KEY || '';
-    if(key){
-      await fetch('https://dosrjoxtajpggvxogbvw.supabase.co/rest/v1/predictions?id=eq.' + id, {
-        method: 'DELETE',
-        headers: { 'apikey': key, 'Authorization': 'Bearer ' + key }
-      });
+    if(key && rec){
+      var home = rec.home, away = rec.away;
+      if((!home || !away) && rec.match){ var parts = String(rec.match).split(' vs '); home = parts[0]; away = parts[1]; }
+      if(home && away){
+        await fetch('https://dosrjoxtajpggvxogbvw.supabase.co/rest/v1/predictions?home_team=eq.' + encodeURIComponent(home) + '&away_team=eq.' + encodeURIComponent(away), {
+          method: 'DELETE',
+          headers: { 'apikey': key, 'Authorization': 'Bearer ' + key }
+        });
+      }
     }
   } catch(e){ console.log('[delVerify] Supabase 删除失败:', e.message); }
   refreshVerify();
@@ -4188,7 +4217,7 @@ async function init(){
       if(!score){ alert('请填入实际比分'); return; }
       saveActual(vsave, score, corners);
     }
-    var vreset = t.dataset.vreset ? parseInt(t.dataset.vreset) : null;
+    var vreset = t.dataset.vreset ? t.dataset.vreset : null;
     if(vreset){ resetVerify(vreset); }
   });
 
