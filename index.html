@@ -1717,15 +1717,15 @@ ${h2hText}
 - 即使无角球盘口，也应在报告中展示预期角球数作为参考（用数据库值或估算值）
 
 【⚠️ 强制规则】
-1. Edge阈值：角球≥6%、大小球≥4%、其他≥3%。低于阈值则观望。
+1. Edge阈值（角球≥6%、大小球≥4%、其他≥3%）仅用于信号完整性评级展示，不再作为推荐闸门；推荐强度由程序按置信度分档，rec.main 必须始终输出概率最高的方向。
 2. 球队名称和排名不能强制决定角球预期，必须使用有来源且口径明确的数据。
 3. 平局概率不能单独决定大小球上限或角球折扣；情境影响仅估算一次。
 4. rec.main.edge 必须与 markets 数组中对应盘口的 edge 值完全一致，不得自行重算。
-5. 如果 rec.main 的 edge < 0 或低于阈值，conf 填"观望"，但仍应在报告中输出"市场异动提示"。
+5. 如果 rec.main 的 edge < 0，在 note 中注明负 Edge 风险；仍应在报告中输出"市场异动提示"。
 6. 杯赛动机只作为有证据的分析因素，不执行固定概率修正。
 
 【📋 胜率优先模式 · 三区块输出规则】
-区块1 - 主推：从 probs 中选出概率最高的方向，概率≥52%且Edge达标。
+区块1 - 主推：从 probs 中选出概率最高的方向填入 rec.main（不设概率与 Edge 门槛，edge 与 markets 对应值保持一致）。
 区块2 - 爆冷预警：第二高概率≥20%且赔率≥4.00，或快照信号触发（客胜被推高且客胜概率≥10%）。
 区块3 - 价值补充：Edge达标的非胜平负盘口。
 
@@ -2275,17 +2275,16 @@ function validateAndFixScore(r, context, cornerLookup) {
     if (/^(客胜|Away|away)$/.test(m.s)) m.p=pr.away;
     m.edge=m.p!=null && m.odds!=null ? m.p-1/m.odds : null;
   });
-  function sync(rec) {
+  function sync(rec, noEdgeGate) {
     if (!rec || typeof rec.dir !== 'string') return null;
     var matches=r.markets.filter(function(m){return m.s===rec.dir || m.m+' '+m.s===rec.dir;});
     if (matches.length!==1) return null;
     var m=matches[0];
-    if (m.edge==null || m.edge<getEdgeThreshold(m.m)) return null;
+    if (!noEdgeGate && (m.edge==null || m.edge<getEdgeThreshold(m.m))) return null;
     return Object.assign({},rec,{odds:m.odds,prob:m.p,edge:m.edge});
   }
   r.rec=r.rec || {};
-  r.rec.main=sync(r.rec.main);
-  if(r.rec.main && r.rec.main.prob<0.52) r.rec.main=null;
+  r.rec.main=sync(r.rec.main, true); // v35: 主推不过 Edge 闸门, 强度由置信度分档
   r.rec.upset=sync(r.rec.upset);
   r.rec.value=(Array.isArray(r.rec.value)?r.rec.value:[]).map(sync).filter(Boolean);
   if(!r.rec.main) { r.rec.conf='观望'; r.rec.stake='0'; }
@@ -3248,6 +3247,7 @@ function renderResults(snapData, cornerLookup){
     }
 
     var mainThreshold = main.dir ? getEdgeThreshold(main.dir) : 0.04;
+    if (main && main.dir) main.conf_score = conf.score; // v35: 置信度挂到 main 供分档 (旧版读不到, 恒观望)
     var recLevel = getRecommendationLevel(main, mainThreshold);
 
     h += '<div class="slip"><div class="slip-bar"></div>';
@@ -3256,7 +3256,7 @@ function renderResults(snapData, cornerLookup){
     if (recLevel.level === 'strong') {
       var mainEdge = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #2D7D4F55;margin-bottom:10px">';
-      h += '<div style="font-size:10px;color:#2D7D4F;font-weight:700;letter-spacing:.08em">✅ 主推（Edge达标）</div>';
+      h += '<div style="font-size:10px;color:#2D7D4F;font-weight:700;letter-spacing:.08em">✅ 主推（置信度达标）</div>';
       h += '<div style="font-size:18px;font-weight:900;color:#B7791F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#7A6E5F;font-weight:400">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
       h += '<span>胜率 <b style="color:#3E3428">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
@@ -3303,7 +3303,7 @@ function renderResults(snapData, cornerLookup){
     } else if (recLevel.level === 'light') {
       var mainEdge2 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #EA580C55;margin-bottom:10px">';
-      h += '<div style="font-size:10px;color:#C2571B;font-weight:700;letter-spacing:.08em">⚡ 轻注关注（Edge未达阈值，建议小额试探）</div>';
+      h += '<div style="font-size:10px;color:#C2571B;font-weight:700;letter-spacing:.08em">⚡ 轻注关注（置信度达标，建议小额试探）</div>';
       h += '<div style="font-size:18px;font-weight:900;color:#B7791F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:14px;color:#7A6E5F;font-weight:400">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
       h += '<span>胜率 <b style="color:#3E3428">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
@@ -3315,7 +3315,7 @@ function renderResults(snapData, cornerLookup){
     } else if (recLevel.level === 'hint') {
       var mainEdge3 = main.edge != null ? (main.edge * 100).toFixed(1) + '%' : '—';
       h += '<div style="padding:12px;background:#E0D5C0;border-radius:8px;border:1px solid #2E5FA344;margin-bottom:10px">';
-      h += '<div style="font-size:10px;color:#2E5FA3;font-weight:700;letter-spacing:.08em">📌 倾向提示（正Edge但未达阈值，仅供参考）</div>';
+      h += '<div style="font-size:10px;color:#2E5FA3;font-weight:700;letter-spacing:.08em">📌 倾向提示（置信度偏低，仅供参考）</div>';
       h += '<div style="font-size:16px;font-weight:700;color:#7A6E5F;margin-top:2px">'+esc(main.dir)+' <span style="font-size:13px;color:#A89E8E">@'+(main.odds || '—')+'</span></div>';
       h += '<div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#7A6E5F;margin-top:4px">';
       h += '<span>胜率 <b style="color:#3E3428">'+(main.prob != null ? pct(main.prob) : '—')+'</b></span>';
