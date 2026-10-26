@@ -1730,7 +1730,7 @@ ${h2hText}
 区块3 - 价值补充：Edge达标的非胜平负盘口。
 
 【⚠️ 数学一致性要求（强制执行）】
-1. probs 三项须在0到1之间且总和为1。最可能单个比分的方向可以不同于最高胜平负概率。
+1. probs 三项须在0到1之间且总和为1。最可能单个比分的方向必须与最高胜平负概率一致：predicted_score 是平局时 draw 必须是 probs 最高项；是主/客胜时对应项必须是 probs 最高项。
 2. goals.exp_total 与 goals.over25 必须保持统计一致性。
 3. scores 是部分比分分布，不强制其合计超过50%。每个方向的比分概率之和不得超过该方向概率；大、小比分概率之和分别不得超过 over25 和 1-over25。
 4. 所有 markets 中的 edge 必须准确计算为 AI概率 - 1/赔率，确保数据一致。
@@ -2687,6 +2687,21 @@ async function analyze(){
     
     // ---- ★ 强制补全缺失盘口 ----
     r = ensureAllMarkets(r, finalOddsText);
+
+    // ---- ★ v36：接通角球盘口解析（parseCornerOddsFromText 此前写好但从未被调用）----
+    // 从赔率文本/OCR 文本里解析真实角球线，存入 r.line，供 autoAddVerify 算概率、定方向、结算。
+    // 解析不到时 r.line 保持 null，角球方向回落到固定阈值（旧行为）。
+    try {
+      var _cornerParsed = parseCornerOddsFromText(finalOddsText);
+      if (_cornerParsed && _cornerParsed.length) {
+        var _c0 = _cornerParsed[0];
+        if (Number.isFinite(_c0.line)) {
+          r.line = _c0.line;
+          r.corner_over_odds = _c0.overOdds;
+          r.corner_under_odds = _c0.underOdds;
+        }
+      }
+    } catch (_ce) { console.warn('[v36] 角球盘口解析失败:', _ce && _ce.message ? _ce.message : _ce); }
     
     ST.result = r;
     if(r.odds_snapshot && r.odds_snapshot.home != null){
@@ -2715,12 +2730,40 @@ async function analyze(){
   }
 }
 
+// ---- ★ v36：从 AI markets 里取角球盘口线（parseCornerOddsFromText 的后备）----
+// AI 只输出 OCR/输入里有真实赔率的盘口（提示词禁编造），故 markets 里的角球线可信。
+// 找不到返回 null，调用方回落固定阈值。
+function cornerLineFromMarkets(markets){
+  if (!Array.isArray(markets)) return null;
+  for (var i = 0; i < markets.length; i++) {
+    var mk = markets[i];
+    if (!mk || typeof getMarketType !== 'function') continue;
+    if (getMarketType(mk.m) !== 'corners') continue;
+    var mm = (mk.m || '').match(/([\d.]+)/);
+    if (mm) {
+      var v = parseFloat(mm[1]);
+      if (isFinite(v) && v >= 5 && v <= 30) return v;
+    }
+  }
+  return null;
+}
+
 // ── 自动记入验证（含置信度，拆分AI与系统推荐） ──
 function autoAddVerify(r, home, away, cornerLookup){
   if(r._prediction_blocked)return;
   if(!r) return;
   var pr = r.probs || {};
-  var pred_1x2 = pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
+  // v36 平局修复：胜平负从预测比分推导（与大小球同款做法），比分是平局就标平局；
+  // 比分解析失败时回落到 probs 最高项（旧行为）。
+  var scoreStr0 = (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : '');
+  var pred_1x2 = (function(){
+    var m = /^\s*(\d+)\s*[-:]\s*(\d+)\s*$/.exec(scoreStr0 || '');
+    if (m) {
+      var hg = parseInt(m[1], 10), ag = parseInt(m[2], 10);
+      return hg > ag ? 'home' : (ag > hg ? 'away' : 'draw');
+    }
+    return pr.home > pr.away ? (pr.home > pr.draw ? 'home' : 'draw') : (pr.away > pr.draw ? 'away' : 'draw');
+  })();
   var sys_rec = r.rec?.main?.dir || null;
   var sys_1x2 = null;
   if (sys_rec) {
@@ -2729,6 +2772,27 @@ function autoAddVerify(r, home, away, cornerLookup){
     else if (sys_rec.indexOf('客') >= 0 || sys_rec.toLowerCase().indexOf('away') >= 0) sys_1x2 = 'away';
   }
   var conf = calculateConfidence(r, home, away, ST.league, ST.context, cornerLookup);
+  // ---- ★ v36：角球概率接线 ----
+  // 真实盘口线：r.line（analyze 里 parseCornerOddsFromText 解析）优先，其次 AI markets 里的角球盘口线；
+  // 两者都没有时 line=null，方向回落固定阈值（旧行为），不存概率。
+  var cornerLine = (typeof r.line === 'number' && isFinite(r.line)) ? r.line : cornerLineFromMarkets(r.markets);
+  var cornerRaw = !r._corner_reference_only && r.corners && r.corners.exp_total != null ? r.corners.exp_total : null;
+  var cornerSan = cornerRaw == null ? null : sanitizeCornerPrediction(cornerRaw, 10);
+  var cornerTotal = cornerSan ? cornerSan.value : null;
+  var cornerProbCal = null;
+  if (cornerTotal != null && cornerLine != null) {
+    var _pRaw = estimateOverProbability(cornerTotal, cornerLine);
+    if (typeof _pRaw === 'number' && isFinite(_pRaw)) cornerProbCal = calibrateCornerProb(_pRaw);
+  }
+  var cornerDir = null;
+  if (cornerTotal != null) {
+    if (cornerProbCal != null) {
+      // 校准概率 0.55/0.45 对应 exp 比线高/低约 0.6 个角（σ≈3.3），阈值写死一处。
+      cornerDir = cornerProbCal >= 0.55 ? '大角' : (cornerProbCal <= 0.45 ? '小角' : '观望');
+    } else {
+      cornerDir = cornerTotal >= 10.5 ? '大角' : (cornerTotal <= 9.5 ? '小角' : '观望');
+    }
+  }
   var entry = {
     id: Date.now(),
     date: /^\d{4}-\d{2}-\d{2}/.test(getField('kickoff')) ? getField('kickoff').slice(0,10) : new Date().toISOString().slice(0,10),
@@ -2738,7 +2802,7 @@ function autoAddVerify(r, home, away, cornerLookup){
     match: home + ' vs ' + away,
     ai_pred_1x2: pred_1x2,
     sys_rec_1x2: sys_1x2,
-    pred_score: (r.predicted_score && r.predicted_score.score) || (typeof r.predicted_score === 'string' ? r.predicted_score : ''),
+    pred_score: scoreStr0,
     pred_over25: (function(){
       // 大小球从预测比分推导 (替代 AI 独立预测，避免比分与大小球自相矛盾)
       // 规则: 总进球>=3 → over; 总进球<=2 → under
@@ -2751,20 +2815,17 @@ function autoAddVerify(r, home, away, cornerLookup){
       // 比分解析失败时降级用 AI 概率
       return (r.goals && typeof r.goals.over25 === 'number') ? (r.goals.over25 >= 0.5 ? 'over' : 'under') : null;
     })(),
-    pred_corners_total: (function(){
-      var raw = !r._corner_reference_only && r.corners && r.corners.exp_total != null ? r.corners.exp_total : null;
-      if (raw == null) return null;
-      var s = sanitizeCornerPrediction(raw, 10);
-      return s.value;
-    })(),
+    pred_corners_total: cornerTotal,
+    pred_corners_prob: cornerProbCal,
+    corner_line_source: cornerLine != null ? 'market' : 'fixed',
     filter_reference: r.corners ? r.corners.reference_total : null,
     filter_gap: (function(){
       var ref = r.corners ? r.corners.reference_total : null;
-      var ln = r.line;
+      var ln = cornerLine;
       if (ref == null || ln == null) return null;
       return Math.round((ref - ln) * 100) / 100;
     })(),
-    filter_line: r.line != null ? r.line : null,
+    filter_line: cornerLine,
     cross_competition: (function(){
       var lg = (ST.league || '').toLowerCase();
       var leagues = ['ucl','uEL','uecl','欧冠','欧联','欧会杯','champions','europa','conference'];
@@ -2789,9 +2850,7 @@ function autoAddVerify(r, home, away, cornerLookup){
     analysis_at: new Date().toISOString(),
     team_profiles_used:r.team_profiles_used,
     corner_evidence_status: r._corner_reference_only ? 'reference_only' : 'ai_estimate_uncalibrated',
-    pred_corner_direction: !r._corner_reference_only && r.corners && r.corners.exp_total != null
-      ? (r.corners.exp_total >= 10.5 ? '大角' : r.corners.exp_total <= 9.5 ? '小角' : '观望')
-      : null,
+    pred_corner_direction: cornerDir,
     actual_score: null,
     actual_corners: null,
     actual_1x2: null,
@@ -2815,9 +2874,13 @@ function autoAddVerify(r, home, away, cornerLookup){
   //   否则 predFull 写入失败会降级走 predCore（仅保留 handicap_line）。
   (function(){
     var dir = entry.pred_corner_direction;
-    var line = null;
-    if (dir === '大角') line = 10.5;        // 隐含盘口线：方向反推，非真实报价
-    else if (dir === '小角') line = 9.5;    // 隐含盘口线：方向反推，非真实报价
+    // v36：优先用真实盘口线（entry.filter_line，来自 parseCornerOddsFromText 或 AI markets）；
+    // 无真实线时才回落到旧的「方向反推」隐含线（大角=10.5 / 小角=9.5）。
+    var line = entry.filter_line != null ? entry.filter_line : null;
+    if (line == null) {
+      if (dir === '大角') line = 10.5;        // 隐含盘口线：方向反推，非真实报价
+      else if (dir === '小角') line = 9.5;    // 隐含盘口线：方向反推，非真实报价
+    }
     // '观望' 或无方向时 line 保持 null，表示无有效盘口
     entry.handicap_line = line;
     entry.handicap_over_odds = null;       // TODO: 真实大球赔率，待数据源接入
@@ -2845,6 +2908,9 @@ function autoAddVerify(r, home, away, cornerLookup){
       pred_score: entry.pred_score,
       pred_over25: entry.pred_over25,
       pred_corners_total: entry.pred_corners_total,
+      pred_corners_prob: entry.pred_corners_prob,
+      corner_line_source: entry.corner_line_source,
+      filter_line: entry.filter_line,
       pred_corner_direction: entry.pred_corner_direction,
       handicap_line: entry.handicap_line,            // ★ 第1项优化：重复分析时同步盘口线
       handicap_over_odds: entry.handicap_over_odds,  // ★ 第1项优化（TODO真实赔率）
@@ -3445,12 +3511,21 @@ function saveActual(id, score, corners){
     var correct_over25 = !v.pred_over25 ? null : (actual_over25 && v.pred_over25 === actual_over25) ? true : (actual_over25 ? false : null);
     var correct_corners = null;
     if(!isNaN(actual_corners_val) && v.pred_corner_direction){
-      // 按实际盘口 Over/Under 结算 (替代此前的 预测总数±1.5)
-      // 大角: 隐含盘口 10.5, 实际>=11 算赢; 小角: 隐含盘口 9.5, 实际<=9 算赢; 观望: 不结算
-      if(v.pred_corner_direction === '大角'){
-        correct_corners = actual_corners_val >= 11;
-      } else if(v.pred_corner_direction === '小角'){
-        correct_corners = actual_corners_val <= 9;
+      // v36：方向按真实盘口线结算（v.filter_line）；等于线算走盘（null，不结算）。
+      // 无真实线（老记录 / 方向按固定阈值定）时沿用固定线：大角实际>=11 赢，小角实际<=9 赢；观望不结算。
+      var _ln = (typeof v.filter_line === 'number' && isFinite(v.filter_line)) ? v.filter_line : null;
+      if (_ln != null && v.corner_line_source === 'market') {
+        if (v.pred_corner_direction === '大角') {
+          correct_corners = actual_corners_val > _ln ? true : (actual_corners_val < _ln ? false : null);
+        } else if (v.pred_corner_direction === '小角') {
+          correct_corners = actual_corners_val < _ln ? true : (actual_corners_val > _ln ? false : null);
+        }
+      } else {
+        if(v.pred_corner_direction === '大角'){
+          correct_corners = actual_corners_val >= 11;
+        } else if(v.pred_corner_direction === '小角'){
+          correct_corners = actual_corners_val <= 9;
+        }
       }
       // 观望保持 null
     }
@@ -3565,7 +3640,7 @@ function refreshVerify(){
   var settled = ST.verify.filter(function(v){ return v.actual_1x2 !== null || v.actual_score !== null; });
   
   // ---- AI统计 ----
-  var aiStats = { c1x2: 0, t1x2: 0, cscore: 0, tscore: 0, co25: 0, to25: 0, ccorners: 0, tcorners: 0 };
+  var aiStats = { c1x2: 0, t1x2: 0, cscore: 0, tscore: 0, co25: 0, to25: 0, ccorners: 0, tcorners: 0, cpm15: 0, tpm15: 0 };
   // ---- 系统推荐统计 ----
   var sysStats = { c1x2: 0, t1x2: 0 };
 
@@ -3575,15 +3650,18 @@ function refreshVerify(){
     if(v.correct_score !== null){ aiStats.tscore++; if(v.correct_score) aiStats.cscore++; }
     if(v.correct_over25 !== null){ aiStats.to25++; if(v.correct_over25) aiStats.co25++; }
     if(v.correct_corners !== null){ aiStats.tcorners++; if(v.correct_corners) aiStats.ccorners++; }
+    // v36：真 ±1.5（|预测−实际| ≤ 1.5），与方向胜率分开统计
+    if(v.pred_corners_total != null && v.actual_corners != null){ aiStats.tpm15++; if(Math.abs(v.actual_corners - v.pred_corners_total) <= 1.5) aiStats.cpm15++; }
   });
 
-  // ---- 渲染AI统计（3项） ----
+  // ---- 渲染AI统计（4项） ----
   if(statsAi){
     statsAi.innerHTML = '';
     var aiCards = [
       { label: '胜平负', hit: aiStats.c1x2, total: aiStats.t1x2 },
       { label: '大小球2.5', hit: aiStats.co25, total: aiStats.to25 },
-      { label: '角球±1.5', hit: aiStats.ccorners, total: aiStats.tcorners }
+      { label: '角球方向', hit: aiStats.ccorners, total: aiStats.tcorners },
+      { label: '角球±1.5', hit: aiStats.cpm15, total: aiStats.tpm15 }
     ];
     aiCards.forEach(function(card){
       var rate = card.total > 0 ? Math.round(card.hit / card.total * 100) : null;
@@ -4342,7 +4420,7 @@ document.addEventListener('DOMContentLoaded', init);
  };
  global.applyLiveAdjustments=global.CornerModel.adjust;
  global.analyzeLivePace=global.CornerModel.pace;
- global.estimateOverProbability=function(){return null;};
+ // v36：删掉把 estimateOverProbability 覆写成 return null 的空壳，角球概率改由 autoAddVerify 调真实函数计算。
  document.addEventListener('DOMContentLoaded',()=>{
   const el=document.getElementById('corner-season');if(!el)return;
   el.value='';el.addEventListener('focus',()=>{if(typeof ST!=='undefined')global.CornerModel.selectedSeason(LEAGUE_CODE_MAP[ST.league]);});
