@@ -5,6 +5,36 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>球赛分析终端 · 角球数据修复版</title>
 <script>
+/* ── v44 (2026-11-11) 在 v43 基础上：────────────────────────────────────
+   实测截图 Total Corners ladder 整列丢小数点（9.5→95、1.79→179、1.90→150）。
+   v43 能修回线、但会把「赔率不可用」的那一档整对丢掉，于是主线挑到相邻的 10.5，
+   方向仍会算成小角。v44 改为：
+   1) 保留每档各自的单边赔率（只要单边在 1.05–12），仅标记「成对水位不可用」；
+   2) 主线统一用「隐含大球概率离 0.5 的距离」排序，配对/单边同一把尺子；
+   3) 不可用的那对赔率不落库（只用于挑主线），避免假赔率算边际。
+   这样 179/150 那档仍然能凭 1.79 被认成主盘 9.5，方向回到「观望」。
+   ── */
+
+/* ── v43 (2026-11-10) 在 v42 基础上：────────────────────────────────────
+   角球盘口解析加校验：线必须在 6–16 且为 .0/.5，赔率 1.05–12，去水后 0.95–1.15。
+   OCR 丢小数点（9.5→95、1.79→179，Arsenal vs Leeds 实测）时按 10/100 修复；
+   线能修好但赔率修不好 → 保留线、丢掉赔率；连线的量级都修不回来 → 整档丢弃。
+   修复/丢弃都会在 Console 打一行「[角球盘口] 解析校验」，并在卡片 note 上标注。
+   ── */
+
+/* ── v42 (2026-11-10) 变更说明 ─────────────────────────────────────────
+   本次只动「测量口径」和「存储」，不动算法阈值：
+   1) 记录新增 pred_corners_prob / corner_line_source / filter_line / filter_reference /
+      filter_gap 等字段并写入 Supabase（v41 里算了但被 PREDICTION_COLS 白名单丢掉，
+      导致云端无法做概率校准，也无法按真实盘口线结算）。
+   2) 真线解析到的成对大小赔率写入 handicap_over_odds / handicap_under_odds（v41 恒为 null）。
+   3) 验证记录不再存全量 team_profiles_used（每条约 70KB，会把 localStorage 撑爆），
+      改存摘要；历史记录在载入时自动瘦身；写入配额不足时丢最旧记录并显式报警，不再静默失败。
+   4) 主线改取「大小赔率最接近 50/50」的一档（文档 §3.3 的定义），v41 实际取的是文本第一条。
+   5) 云端回读补上 filter_line / corner_line_source / pred_corners_prob，换设备后结算口径不再漂移。
+   6) 筛选器对缺少逐场样本的球队给出准确提示（v41 一律报「双方样本赛季不一致」）。
+   ── */
+
 /* ── supabaseClient.js ── */
 /**
  * supabaseClient.js — Supabase 连接配置
@@ -280,7 +310,7 @@
   function saveSnapshot(data) {
     return supabasePost('snapshots', data);
   }
-  var PREDICTION_COLS = ["match_date","league_code","home_team","away_team","pred_corners","pred_direction","pred_confidence","bet_line","over_odds","under_odds","actual_corners","correct_corners","ai_1x2","actual_1x2","correct_1x2","pred_score","actual_score","correct_score","conf_score","note","actual_over25","correct_ai_1x2","correct_sys_1x2","correct_over25","ai_pred_1x2","sys_rec_1x2","pred_corners_total","pred_corner_direction","filter_reference","filter_gap","filter_line","filter_basis","cross_competition","conf_calibrated","conf_label","corner_evidence_status","data_quality","data_gaps","handicap_line","handicap_over_odds","handicap_under_odds","handicap_captured_at","odds_snapshot","team_profiles_used","model_version","analysis_at","date","kickoff","league","date_basis","evidence_summary","match"];
+  var PREDICTION_COLS = ["match_date","league_code","home_team","away_team","pred_corners","pred_direction","pred_confidence","bet_line","over_odds","under_odds","actual_corners","correct_corners","ai_1x2","actual_1x2","correct_1x2","pred_score","actual_score","correct_score","conf_score","note","actual_over25","correct_ai_1x2","correct_sys_1x2","correct_over25","ai_pred_1x2","sys_rec_1x2","pred_corners_total","pred_corners_prob","pred_corner_direction","corner_line_source","filter_reference","filter_gap","filter_line","filter_basis","cross_competition","conf_calibrated","conf_label","corner_evidence_status","data_quality","data_gaps","handicap_line","handicap_over_odds","handicap_under_odds","handicap_captured_at","odds_snapshot","team_profiles_used","model_version","analysis_at","date","kickoff","league","date_basis","evidence_summary","match"];
   function savePrediction(data) {
     var filtered = {};
     PREDICTION_COLS.forEach(function(k){ if(data[k] !== undefined && data[k] !== false && data[k] !== "false") filtered[k] = data[k]; });
@@ -1106,7 +1136,14 @@ async function filterSchedule(text){
   if(!ht||!at){r.reason='无法唯一匹配双方球队或没有历史样本';results.push(r);continue;}
   const hs=h.seasons.at(-1),as=a.seasons.at(-1),hv=ht.windows[ht.primary_window],av=at.windows[at.primary_window];
   r.homeSamples=hv.sample_size;r.awaySamples=av.sample_size;r.homeAge=ht.latest_sample_age_days;r.awayAge=at.latest_sample_age_days;
-  if(!hs||!as||hs.season_candidate!==as.season_candidate){r.reason='双方样本赛季不一致，暂不计算对阵参考';results.push(r);continue;}
+  // v42：区分「profiles 里根本没这支队」与「双方赛季不一致」。v41 一律报后者，
+  // 把「24 支队缺逐场样本」这个数据问题伪装成赛季问题，查不出来。
+  if(!hs||!as){
+   const miss=[];if(!hs)miss.push(home);if(!as)miss.push(away);
+   r.reason=miss.join('、')+' 在逐场样本里没有记录（profiles 未覆盖该队），暂不计算对阵参考';
+   results.push(r);continue;
+  }
+  if(hs.season_candidate!==as.season_candidate){r.reason='双方样本赛季不一致（'+hs.season_candidate+' vs '+as.season_candidate+'），暂不计算对阵参考';results.push(r);continue;}
   if(!hv.sample_size||!av.sample_size){r.reason='优先时间窗口没有双方可用样本';results.push(r);continue;}
   r.reference=(hv.avg_for+av.avg_against+av.avg_for+hv.avg_against)/2;
   const sparse=hv.sample_size<5||av.sample_size<5,old=ht.latest_sample_age_days>90||at.latest_sample_age_days>90;
@@ -1270,6 +1307,13 @@ async function loadVerify(){
               ai_pred_1x2: p.ai_1x2,
               pred_score: p.pred_score,
               analysis_at: p.created_at,
+              // v42：回读补上测量字段，否则换设备后真线结算与概率校准全部丢失
+              pred_corners_prob: (typeof p.pred_corners_prob === 'number' && isFinite(p.pred_corners_prob)) ? p.pred_corners_prob : null,
+              corner_line_source: p.corner_line_source || null,
+              filter_line: (typeof p.filter_line === 'number' && isFinite(p.filter_line)) ? p.filter_line : null,
+              filter_reference: (typeof p.filter_reference === 'number' && isFinite(p.filter_reference)) ? p.filter_reference : null,
+              filter_gap: (typeof p.filter_gap === 'number' && isFinite(p.filter_gap)) ? p.filter_gap : null,
+              handicap_line: (typeof p.handicap_line === 'number' && isFinite(p.handicap_line)) ? p.handicap_line : null,
               _from_supabase: true
             });
           }
@@ -1279,11 +1323,35 @@ async function loadVerify(){
     }
   }catch(e){ console.warn('[verify] Supabase 加载失败, 用本地数据:', e && e.message); }
   local = dedupe(local);
+  // v42：历史记录里的 team_profiles_used 是全量 profile（实测每条约 70KB），
+  // 110 条就超过 localStorage 的 5MB 配额，旧版是静默失败 → 记录悄悄丢失。
+  // 这里统一瘦身成摘要（逐场证据仍可用 profile_digest 追溯，UI 不读这个字段）。
+  var _slimmed = 0;
+  local.forEach(function(v){
+    if(v && v.team_profiles_used && !v.team_profiles_used._slim){ v.team_profiles_used = slimProfiles(v.team_profiles_used); _slimmed++; }
+  });
+  if(_slimmed) console.info('[verify] 已把 '+_slimmed+' 条历史记录的全量 profile 收成摘要');
   // 去重结果写回本地, 清掉历史重复副本
-  try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(local)); }catch(e){}
+  if(saveVerify(local) === false) console.warn('[verify] 瘦身后仍写不进 localStorage，见上一条错误');
   return local;
 }
-function saveVerify(arr){ try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); }catch(e){} }
+function saveVerify(arr){
+  // v42：不再静默吞掉配额错误 —— 先把最旧的一半丢掉再试一次，仍失败就明确报错并返回 false
+  try{ localStorage.setItem(VERIFY_KEY, JSON.stringify(arr)); return true; }
+  catch(e){
+    try{
+      var keep = Math.max(20, Math.floor(arr.length * 0.5));
+      var trimmed = arr.slice(0, keep);
+      localStorage.setItem(VERIFY_KEY, JSON.stringify(trimmed));
+      console.error('[verify] localStorage 配额不足（' + (e && e.name) + '）：已丢弃 ' +
+        (arr.length - trimmed.length) + ' 条最旧记录，仅保留最近 ' + keep + ' 条。请先把验证表导出/回填到 Supabase。');
+      return 'trimmed';
+    }catch(e2){
+      console.error('[verify] 验证记录保存失败（localStorage 写入被拒）：' + (e2 && e2.name) + ' ' + (e2 && e2.message));
+      return false;
+    }
+  }
+}
 
 // =====================================================================
 // 快照系统
@@ -1992,16 +2060,94 @@ function parseCornerOddsFromText(text) {
     }
   }
   
-  // 去重
+  // v43：OCR 丢小数点会把 9.5 读成 95、1.79 读成 179（2026-11-10 Arsenal vs Leeds 实测发生）。
+  // v42 及以前只校验 line>=5.0，于是 95 被当成真实盘口，p_cal 被算成 0.15、方向变「小角」，
+  // 结算时任何真实角球都 < 95 → 小角永远判赢。这里加三重校验与量级修复。
   var seen = {};
   var result = [];
+  var _rejects = [];
   cornerLines.forEach(function(c){
-    if (!seen[c.line]) {
-      seen[c.line] = true;
-      result.push(c);
-    }
+    var r = plausCornerRung(c.line, c.overOdds, c.underOdds);
+    if (!r) { _rejects.push(c.line + '(' + c.overOdds + '/' + c.underOdds + ')'); return; }
+    if (seen[r.line]) return;
+    seen[r.line] = true;
+    var nv = (r.oddsUsable && r.overOdds != null && r.underOdds != null) ? removeVig(r.overOdds, r.underOdds) : null;
+    result.push({
+      line: r.line, overOdds: r.overOdds, underOdds: r.underOdds,
+      scoreOver: r.scoreOver, scoreUnder: r.scoreUnder,
+      oddsUsable: !!r.oddsUsable, oddsSuspect: !!r.oddsSuspect, repaired: !!r.repaired,
+      impliedProb: nv ? nv.overProb : (r.overOdds != null ? 1 / r.overOdds : null),
+      noVig: nv
+    });
   });
+  if (_rejects.length || result.some(function(x){ return x.repaired || x.oddsSuspect; })) {
+    try {
+      console.warn('[角球盘口] 解析校验：原始 ' + cornerLines.length + ' 档 → 采用 ' + result.length +
+        ' 档' + (_rejects.length ? '，丢弃 ' + _rejects.length + ' 档' : ''),
+        '原始:', cornerLines.map(function(c){ return c.line + '(' + c.overOdds + '/' + c.underOdds + ')'; }).join(' , '),
+        '采用:', result.map(function(x){ return x.line + '(' + (x.overOdds == null ? '赔率已忽略' : x.overOdds + '/' + x.underOdds) + ')' + (x.repaired ? '[修复]' : ''); }).join(' , '));
+    } catch (e) {}
+  }
+  // v42：主线 = 大小赔率最接近 50/50 的那一档（文档 §3.3 的定义）。
+  // v41 直接取文本里第一条，若截图首行是 8.5 而不是主盘，方向/概率/边际会整体错一档。
+  // 兜底：全部缺赔率时保持原顺序。
+  // v42/v44：主线 = 隐含大球概率最接近 50/50 的那一档（文档 §3.3 的定义）。
+  // v41 直接取文本里第一条；配对与单边用同一把尺子，避免「赔率坏掉的那档」被整对跳过。
+  if (result.length > 1) {
+    result.sort(function(a, b){ return mainLineScore(a) - mainLineScore(b); });
+  }
   return result.length > 0 ? result : null;
+}
+
+// v43/v44：把一档解析结果校验成「可信的盘口」，必要时按 10/100 修复丢失的小数点。
+// 规则：线 ∈ [6,16] 且必须是 .0/.5；赔率 ∈ [1.05,12] 且成对去水后 Σ(1/赔率) ∈ [0.95,1.15]。
+// 返回 null = 整档不可信（连线的量级都修不回来）。
+// v44：成对水位不成立时不再把两边都丢掉，而是各自保留「单边看似合理」的值并标 oddsUsable=false
+//       —— 挑主线只要一个单边就够（实测 179/150 那档正是靠 1.79 认出主盘 9.5）。
+function plausCornerRung(line, over, under) {
+  if (!isFinite(line)) return null;
+  var Ls = [1, 0.1, 0.01], Os = [1, 0.1, 0.01];
+  var pick = null;
+  for (var i = 0; i < Ls.length && !pick; i++) {
+    var L = line * Ls[i];
+    if (!(L >= 6 && L <= 16)) continue;
+    if (Math.abs(L * 2 - Math.round(L * 2)) > 1e-9) continue;  // 必须是 .0 或 .5
+    pick = { line: L, scale: Ls[i] };
+  }
+  if (!pick) return null;
+  var r3 = function (v) { return Math.round(v * 1000) / 1000; };
+  // ① 先找「成对赔率 + 水位合理」的组合
+  for (var j = 0; j < Os.length; j++) {
+    var O = over * Os[j], U = under * Os[j];
+    if (!(isFinite(O) && isFinite(U))) continue;
+    if (!(O >= 1.05 && O <= 12) || !(U >= 1.05 && U <= 12)) continue;
+    var vig = 1 / O + 1 / U;
+    if (vig < 0.95 || vig > 1.15) continue;
+    return { line: pick.line, overOdds: r3(O), underOdds: r3(U),
+      oddsUsable: true, oddsSuspect: false, repaired: (pick.scale !== 1 || Os[j] !== 1) };
+  }
+  // ② 水位不成立：overOdds/underOdds 一律置空（对下游 fail-safe），
+  //    单边合理值另存 scoreOver/scoreUnder，仅供挑主线使用。
+  var O2 = null, U2 = null;
+  for (var k = 0; k < Os.length; k++) {
+    if (O2 == null && over * Os[k] >= 1.05 && over * Os[k] <= 12) O2 = r3(over * Os[k]);
+    if (U2 == null && under * Os[k] >= 1.05 && under * Os[k] <= 12) U2 = r3(under * Os[k]);
+  }
+  return { line: pick.line, overOdds: null, underOdds: null,
+    scoreOver: O2, scoreUnder: U2,
+    oddsUsable: false, oddsSuspect: true, repaired: (pick.scale !== 1) };
+}
+
+// v44：主线排序尺子 —— 「隐含大球概率离 0.5 有多远」，配对与单边同尺。
+// 配对且水位可用时用去水后的 overProb（无偏）；否则用单边赔率反推。
+function mainLineScore(x) {
+  if (!x) return Infinity;
+  if (x.noVig && isFinite(x.noVig.overProb)) return Math.abs(x.noVig.overProb - 0.5);
+  var o = (x.overOdds != null) ? x.overOdds : x.scoreOver;
+  if (o != null && isFinite(o)) return Math.abs(1 / o - 0.5);
+  var u = (x.underOdds != null) ? x.underOdds : x.scoreUnder;
+  if (u != null && isFinite(u)) return Math.abs((1 - 1 / u) - 0.5);
+  return Infinity;
 }
 
 // =====================================================================
@@ -2699,8 +2845,15 @@ async function analyze(){
         var _c0 = _cornerParsed[0];
         if (Number.isFinite(_c0.line)) {
           r.line = _c0.line;
-          r.corner_over_odds = _c0.overOdds;
-          r.corner_under_odds = _c0.underOdds;
+          // v43/v44：成对水位不成立时写 null，绝不把假赔率带进边际计算
+          var _usable = _c0.oddsUsable !== false;
+          r.corner_over_odds = (_usable && _c0.overOdds != null && isFinite(_c0.overOdds)) ? _c0.overOdds : null;
+          r.corner_under_odds = (_usable && _c0.underOdds != null && isFinite(_c0.underOdds)) ? _c0.underOdds : null;
+          // v43：把修复情况带到卡片上，别让「线被修过」静默发生
+          var _notes = [];
+          if (_c0.repaired) _notes.push('主线按小数点丢失修复为 ' + _c0.line + '（原始 OCR 值不可用）');
+          if (_c0.oddsSuspect) _notes.push('大小赔率不可信，已忽略（边际需手填赔率）');
+          r.corner_parse_note = _notes.length ? _notes.join('；') : null;
         }
       }
     } catch (_ce) { console.warn('[v36] 角球盘口解析失败:', _ce && _ce.message ? _ce.message : _ce); }
@@ -2735,19 +2888,81 @@ async function analyze(){
 // ---- ★ v36：从 AI markets 里取角球盘口线（parseCornerOddsFromText 的后备）----
 // AI 只输出 OCR/输入里有真实赔率的盘口（提示词禁编造），故 markets 里的角球线可信。
 // 找不到返回 null，调用方回落固定阈值。
-function cornerLineFromMarkets(markets){
+// ---- ★ v42：从 AI markets 里挑主线 ----
+// 同一档线可能同时有「大/Over」和「小/Under」两行。优先取配了对的档位，再按
+// |overOdds−underOdds| 最小（≈最接近 50/50）排序；只有单边时退化为 1/赔率 接近 0.5；
+// 全都没赔率则保持文本顺序，取第一档（与 v41 行为一致）。
+function cornerMarketPick(markets){
   if (!Array.isArray(markets)) return null;
-  for (var i = 0; i < markets.length; i++) {
-    var mk = markets[i];
-    if (!mk || typeof getMarketType !== 'function') continue;
-    if (getMarketType(mk.m) !== 'corners') continue;
+  var byLine = {}, order = 0;
+  markets.forEach(function(mk){
+    if (!mk || typeof getMarketType !== 'function') return;
+    if (getMarketType(mk.m) !== 'corners') return;
     var mm = (mk.m || '').match(/([\d.]+)/);
-    if (mm) {
-      var v = parseFloat(mm[1]);
-      if (isFinite(v) && v >= 5 && v <= 30) return v;
-    }
-  }
-  return null;
+    if (!mm) return;
+    var v = parseFloat(mm[1]);
+    if (!(isFinite(v) && v >= 6 && v <= 16)) return;
+    var key = String(v);
+    if (!byLine[key]) byLine[key] = { line: v, overOdds: null, underOdds: null, anyOdds: null, order: order++ };
+    var slot = byLine[key];
+    var o = (typeof mk.odds === 'number' && isFinite(mk.odds) && mk.odds >= 1.05 && mk.odds <= 12) ? mk.odds : null;
+    if (o == null) return;
+    if (slot.anyOdds == null) slot.anyOdds = o;
+    var s = String(mk.s || mk.dir || '').toLowerCase();
+    var isOver  = s.indexOf('大') >= 0 || s.indexOf('over')  >= 0;
+    var isUnder = s.indexOf('小') >= 0 || s.indexOf('under') >= 0;
+    if (isOver  && slot.overOdds  == null) slot.overOdds  = o;
+    if (isUnder && slot.underOdds == null) slot.underOdds = o;
+  });
+  var list = [];
+  for (var k in byLine) list.push(byLine[k]);
+  if (!list.length) return null;
+  list.forEach(function(x){
+    // v44：成对水位不成立时把这一对置空（只留 anyOdds 参与挑主线），与 OCR 侧同一口径
+    var o1 = x.overOdds, u1 = x.underOdds;
+    var vig = (o1 != null && u1 != null) ? (1 / o1 + 1 / u1) : null;
+    x.oddsUsable = !!(vig != null && vig >= 0.95 && vig <= 1.15);
+    if (x.oddsUsable) x.score = Math.abs((1 / o1) / vig - 0.5);
+    else if (x.anyOdds != null) x.score = Math.abs(1 / x.anyOdds - 0.5);
+    else x.score = Infinity;
+    if (!x.oddsUsable) { x.overOdds = null; x.underOdds = null; }
+  });
+  list.sort(function(a, b){ return a.score - b.score || a.order - b.order; });
+  return list[0];
+}
+
+function cornerLineFromMarkets(markets){
+  var pick = cornerMarketPick(markets);
+  return pick ? pick.line : null;
+}
+
+// ── v42：验证记录只存 profile 摘要 ─────────────────────────────────
+// v41 把 TeamProfiles.pair() 的返回值原样塞进每条验证记录，里面有每个时间窗的
+// record_keys（逐场 64 位哈希），单条记录实测约 70KB。110 条就爆 localStorage。
+// 摘要保留「分级筛法」真正用得到的字段：主窗口、样本数、资料年龄、赛季、缺失指标。
+function slimProfiles(p){
+  if(!p) return null;
+  if(p._slim) return p;
+  var out = {_slim:true, profile_version:p.profile_version||null, profile_digest:p.profile_digest||null, cutoff:p.cutoff||null};
+  ['home','away'].forEach(function(side){
+    var q = p[side];
+    if(!q || typeof q !== 'object') return;
+    var t = q.temporal || {}, w = t[side] || {};
+    var lastSeason = (Array.isArray(q.seasons) && q.seasons.length) ? q.seasons[q.seasons.length-1] : null;
+    out[side] = {
+      status: q.status||null, entity_key: q.entity_key||null,
+      team: q.team||null, league: q.league||null,
+      season: lastSeason ? lastSeason.season_candidate : null,
+      season_confirmed: lastSeason ? !!lastSeason.season_confirmed : null,
+      primary_window: w.primary_window||null,
+      primary_sample_size: (w.primary_sample_size==null ? null : w.primary_sample_size),
+      latest_sample_age_days: (w.latest_sample_age_days==null ? null : w.latest_sample_age_days),
+      freshness: w.freshness||null,
+      change_boundary: w.change_boundary||null,
+      missing_metrics: q.missing_metrics||null
+    };
+  });
+  return out;
 }
 
 // ── 自动记入验证（含置信度，拆分AI与系统推荐） ──
@@ -2777,7 +2992,12 @@ function autoAddVerify(r, home, away, cornerLookup){
   // ---- ★ v36：角球概率接线 ----
   // 真实盘口线：r.line（analyze 里 parseCornerOddsFromText 解析）优先，其次 AI markets 里的角球盘口线；
   // 两者都没有时 line=null，方向回落固定阈值（旧行为），不存概率。
-  var cornerLine = (typeof r.line === 'number' && isFinite(r.line)) ? r.line : cornerLineFromMarkets(r.markets);
+  // v42：主线取「最接近 50/50」的那一档；同时把成对大小赔率一起取出来落库，
+  // 这样「筛法边际」事后可复算（v41 只存线、不存赔率，边际永远算不回来）。
+  var _cornerPick = cornerMarketPick(r.markets);
+  var cornerLine = (typeof r.line === 'number' && isFinite(r.line)) ? r.line : (_cornerPick ? _cornerPick.line : null);
+  var cornerOverOdds  = (typeof r.corner_over_odds  === 'number' && isFinite(r.corner_over_odds)  && r.corner_over_odds  > 1) ? r.corner_over_odds  : (_cornerPick ? _cornerPick.overOdds  : null);
+  var cornerUnderOdds = (typeof r.corner_under_odds === 'number' && isFinite(r.corner_under_odds) && r.corner_under_odds > 1) ? r.corner_under_odds : (_cornerPick ? _cornerPick.underOdds : null);
   var cornerRaw = !r._corner_reference_only && r.corners && r.corners.exp_total != null ? r.corners.exp_total : null;
   var cornerSan = cornerRaw == null ? null : sanitizeCornerPrediction(cornerRaw, 10);
   var cornerTotal = cornerSan ? cornerSan.value : null;
@@ -2850,7 +3070,7 @@ function autoAddVerify(r, home, away, cornerLookup){
     predicted_goals: r.goals,
     odds_snapshot: r.odds_snapshot,
     analysis_at: new Date().toISOString(),
-    team_profiles_used:r.team_profiles_used,
+    team_profiles_used:slimProfiles(r.team_profiles_used),
     corner_evidence_status: r._corner_reference_only ? 'reference_only' : 'ai_estimate_uncalibrated',
     pred_corner_direction: cornerDir,
     actual_score: null,
@@ -2885,8 +3105,10 @@ function autoAddVerify(r, home, away, cornerLookup){
     }
     // '观望' 或无方向时 line 保持 null，表示无有效盘口
     entry.handicap_line = line;
-    entry.handicap_over_odds = null;       // TODO: 真实大球赔率，待数据源接入
-    entry.handicap_under_odds = null;      // TODO: 真实小球赔率，待数据源接入
+    // v42：真线解析到的成对赔率直接落库。v41 恒为 null，导致「筛法边际」只能在
+    // 分析卡上现看一次，事后无法复核，也无法做赛后按边际分档的验证。
+    entry.handicap_over_odds  = cornerOverOdds  != null ? cornerOverOdds  : null;
+    entry.handicap_under_odds = cornerUnderOdds != null ? cornerUnderOdds : null;
     entry.handicap_captured_at = line != null ? new Date().toISOString() : null;
   })();
   var existingIdx = -1;
@@ -2945,23 +3167,41 @@ function autoAddVerify(r, home, away, cornerLookup){
       // OLD: (本段为新增。原先 predFull 无任何盘口字段。)
       // TODO: predictions 表需新增 handicap_line/over_odds/under_odds/odds_captured_at 列；
       //   未建列时本次写入抛错，自动降级走 predCore。真实赔率数据源接入后再填 over_odds/under_odds。
-      handicap_line: entry.handicap_line,      // 隐含盘口线：大角=10.5 / 小角=9.5（方向反推）
-      over_odds: entry.handicap_over_odds,     // 目前 null（TODO 真实大球赔率）
-      under_odds: entry.handicap_under_odds,   // 目前 null（TODO 真实小球赔率）
+      handicap_line: entry.handicap_line,      // 真线优先；无真线时是方向反推的隐含线（大角10.5/小角9.5）
+      over_odds: entry.handicap_over_odds,     // v42：真线解析到的成对赔率，无则 null
+      under_odds: entry.handicap_under_odds,
       odds_captured_at: entry.handicap_captured_at,
+      // ---- ★ v42：测量字段（v41 里算了，但被 PREDICTION_COLS 白名单丢掉，云端永远读不到）----
+      pred_corners_prob: entry.pred_corners_prob,      // 校准后的真实概率 p_cal
+      corner_line_source: entry.corner_line_source,    // 'market'=真线结算；'fixed'=固定 11/9
+      pred_corner_direction: entry.pred_corner_direction,
+      filter_line: entry.filter_line,                  // 真实盘口线（不是方向反推线）
+      filter_reference: entry.filter_reference,        // 公式 reference，仅供对照
+      filter_gap: entry.filter_gap,
     };
+    // v42：三段降级 —— 表里若没有新增列，自动退回 v41 的字段集，不会因为加字段把整行写丢。
     DataLoader.savePrediction(predFull).catch(function(e){
-      console.warn('[历史交错] 完整字段写入失败，错误详情:', e && e.message ? e.message : e);
-      // 降级：只写确定存在的核心字段
-      var predCore = {
-        match_date: entry.date,
-        league_code: LEAGUE_CODE_MAP[entry.league] || null,
-        home_team: home,
-        away_team: away,
-        handicap_line: entry.handicap_line,  // ★ 第1项优化：降级路径保留盘口线（表无此列时整行写入失败属预期，见外层注释）
-      };
-      DataLoader.savePrediction(predCore).catch(function(e2){
-        console.warn('[历史交错] 核心字段写入也失败（不影响主流程）:', e2 && e2.message ? e2.message : e2);
+      console.warn('[记录] 含新增测量列的写入失败，降级为 v41 字段集:', e && e.message ? e.message : e);
+      var predV41 = Object.assign({}, predFull);
+      delete predV41.pred_corners_prob;
+      delete predV41.corner_line_source;
+      delete predV41.pred_corner_direction;
+      delete predV41.filter_line;
+      delete predV41.filter_reference;
+      delete predV41.filter_gap;
+      return DataLoader.savePrediction(predV41).catch(function(e1){
+        console.warn('[记录] v41 字段集也失败，降级为核心字段:', e1 && e1.message ? e1.message : e1);
+        // 降级：只写确定存在的核心字段
+        var predCore = {
+          match_date: entry.date,
+          league_code: LEAGUE_CODE_MAP[entry.league] || null,
+          home_team: home,
+          away_team: away,
+          handicap_line: entry.handicap_line,  // ★ 第1项优化：降级路径保留盘口线（表无此列时整行写入失败属预期，见外层注释）
+        };
+        return DataLoader.savePrediction(predCore).catch(function(e2){
+          console.warn('[记录] 核心字段写入也失败（不影响主流程）:', e2 && e2.message ? e2.message : e2);
+        });
       });
     });
   } catch(ignore) {}
@@ -3590,6 +3830,9 @@ function saveActual(id, score, corners){
       // v36：方向按真实盘口线结算（v.filter_line）；等于线算走盘（null，不结算）。
       // 无真实线（老记录 / 方向按固定阈值定）时沿用固定线：大角实际>=11 赢，小角实际<=9 赢；观望不结算。
       var _ln = (typeof v.filter_line === 'number' && isFinite(v.filter_line)) ? v.filter_line : null;
+      // v43：历史记录里可能已经存着 OCR 丢小数点的异常线（如 95）。超出可信区间就不按真线结算，
+      // 否则「小角」在任何真实角球数下都判赢，会凭空抬高胜率。
+      if (_ln != null && (_ln < 6 || _ln > 16)) _ln = null;
       if (_ln != null && v.corner_line_source === 'market') {
         if (v.pred_corner_direction === '大角') {
           correct_corners = actual_corners_val > _ln ? true : (actual_corners_val < _ln ? false : null);
@@ -4483,7 +4726,7 @@ document.addEventListener('DOMContentLoaded', init);
   r._market_anchored=!!(r.market_consensus&&['home','draw','away'].every(k=>Math.abs(r.probs[k]-r.market_consensus[k])<.002));
   r.calibrated=false;r.corners.reference_total=lookup&&Number.isFinite(lookup.total)?lookup.total:null;
   r._corner_reference_only=!Number.isFinite(r.corners.exp_total);
-  r.corners.note='AI预判与历史均值分开；概率为未校准估计。 '+(lookup&&lookup.warning||'未找到可比的角球历史样本。');
+  r.corners.note='AI预判与历史均值分开；概率为未校准估计。 '+(lookup&&lookup.warning||'未找到可比的角球历史样本。')+(r.corner_parse_note?' ⚠️ '+r.corner_parse_note:'');
   r.corners.data_home=lookup&&lookup.home&&!lookup.home.reportOnly?lookup.home.team+' 主场样本 '+lookup.home.sampleSize+' 场，视觉核验 '+lookup.home.visualReviewedCount+' 场':null;
   r.corners.data_away=lookup&&lookup.away&&!lookup.away.reportOnly?lookup.away.team+' 客场样本 '+lookup.away.sampleSize+' 场，视觉核验 '+lookup.away.visualReviewedCount+' 场':null;
   for(const [key,item] of [['home_corner_home',lookup&&lookup.home],['away_corner_away',lookup&&lookup.away]])if(item&&!item.reportOnly)r.key_data[key]=item.team+'；截图样本 '+item.sampleSize+' 场（历史资料）';
